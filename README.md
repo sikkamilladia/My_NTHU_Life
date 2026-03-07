@@ -1,22 +1,10 @@
-# my_nthu_life
-
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
 # My_NTHU_Life
 Final Project for Software Studio where we attempt to make an NTHU (our university) Notion-like app that manages our credits and general university life.
 
 This repository is created 2026-03-07.
 
+Kaelyn's notes:
+Hello, ini pake shared_preferences, jd data student IDnya bakal permanen kl ga jalan run ini:
+
+flutter pub add shared_preferences
+buat nambahin shared_preferences ke VS code ato IDEnya of your choosing :)
