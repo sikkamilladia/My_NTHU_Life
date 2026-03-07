@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:my_nthu_life/signUp.dart';
+import 'package:my_nthu_life/studentData.dart';
 import './home.dart';
 
 //Stateful widget for the Login Screen
@@ -45,15 +47,24 @@ class _LoginState extends State<Login>{
 
               ElevatedButton(
                 onPressed: (){
-                  if(id == "113" && password == "admin"){
-                    Navigator.pushReplacement(
-                      context, 
-                      MaterialPageRoute(
-                        builder: (context) => const Home(studentID: id),
+                  if(studentDatabase.containsKey(id)){
+                    if(studentDatabase[id] == password){
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => Home(studentID: id)));
+                    } else{
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Incorrect password/Student ID. Try Again!'),
+                        backgroundColor: Colors.redAccent,
+                        behavior: SnackBarBehavior.floating,
                       ),
-                    );
+                      );
+                    }
                   } else{
-                    print("invalid login");
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Student ID not found. Redirecting to Sign Up...')),
+                    );
+
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SignUp()),
+                    );
                   }
                 },
                 child: const Text('Login'),

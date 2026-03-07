@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import './login.dart';
 
 class Home extends StatelessWidget{
   final String studentID;
@@ -9,7 +8,7 @@ class Home extends StatelessWidget{
   Widget build(BuildContext context){
     return Scaffold(
       appBar: AppBar(title: const Text('Welcome to My NTHU Life')),
-      body: const Center(child: Text('Hello Student ID: $studentID')),
+      body: Center(child: Text('Hello Student ID: $studentID')),
     );
   }
 }

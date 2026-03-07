@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:my_nthu_life/studentData.dart';
 import './login.dart';
 
-void main() {
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized(); //Need this for Shared Preferences
+  await loadUsers(); //Fill the amp with saved users before the app opens
   runApp(const MyApp());
 }
 
