@@ -50,11 +50,9 @@ class _AuthState extends State<Auth> with SingleTickerProviderStateMixin {
           Positioned.fill(
             child: Image.asset('assets/auth.jpg', fit: BoxFit.cover),
           ),
-
           Positioned.fill(
             child: Container(color: Colors.black.withOpacity(0.6)),
           ),
-
           Center(
             child: LayoutBuilder(
               builder: (context, constraints) => constraints.maxWidth > 700
@@ -72,28 +70,23 @@ class _AuthState extends State<Auth> with SingleTickerProviderStateMixin {
       width: 860,
       height: 560,
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceBright.withOpacity(0.08), // 👈 transparent glass
-        borderRadius: BorderRadius.circular(28),
-
-        // 🔥 thin white outline
+        color: Theme.of(context).colorScheme.surfaceBright.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white.withOpacity(0.3), width: 0.5),
-
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 40),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(10),
         child: Row(
           children: [
             SizedBox(
               width: 860 * 0.55,
               child: ClipRRect(
                 borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  bottomLeft: Radius.circular(28),
+                  topLeft: Radius.circular(10),
+                  bottomLeft: Radius.circular(10),
                 ),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -175,7 +168,7 @@ class _AuthState extends State<Auth> with SingleTickerProviderStateMixin {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(10),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
@@ -185,7 +178,7 @@ class _AuthState extends State<Auth> with SingleTickerProviderStateMixin {
               color: Theme.of(
                 context,
               ).colorScheme.surfaceBright.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(10),
 
               border: Border.all(
                 color: Colors.white.withOpacity(0.3),

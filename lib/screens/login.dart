@@ -92,7 +92,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:my_nthu_life/data/studentData.dart';
-import 'auth_widgets.dart';
+import '../widgets/auth_widgets.dart';
 import 'home.dart';
 
 class Login extends StatefulWidget {
