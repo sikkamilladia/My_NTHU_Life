@@ -4,7 +4,6 @@ import 'package:my_nthu_life/data/semester.dart';
 import 'dart:convert';
 
 class CreditPage extends StatefulWidget {
-  // identitas halaman
   final String studentID;
 
   const CreditPage({super.key, required this.studentID});
@@ -14,47 +13,50 @@ class CreditPage extends StatefulWidget {
 }
 
 class _CreditPageState extends State<CreditPage> {
-  // ====== STATE VARIABLES ======
-  
   final int graduationCredits = 128;
-   List<Semester> semesters = []; //start empty
-   int currentSemesterIndex = 0;
 
-   @override
-   void initState(){
+  List<Semester> semesters = [
+    Semester(semesterName: "Semester 1", courses: [])
+  ];
+
+  int currentSemesterIndex = 0;
+
+  @override
+  void initState() {
     super.initState();
     loadCourses();
-   }
+  }
 
-  // ===== NEW STORAGE LOGIC =====
-  Future<void> saveCourses() async{
+  // ===== STORAGE =====
+  Future<void> saveCourses() async {
     final prefs = await SharedPreferences.getInstance();
-    String encoded = jsonEncode(semesters);
+
+    String encoded =
+        jsonEncode(semesters.map((e) => e.toJson()).toList());
+
     await prefs.setString("Semesters_${widget.studentID}", encoded);
   }
 
-  Future<void> loadCourses() async{
+  Future<void> loadCourses() async {
     final prefs = await SharedPreferences.getInstance();
     String? encoded = prefs.getString("Semesters_${widget.studentID}");
 
-    if(encoded != null){
+    if (encoded != null) {
       final List<dynamic> decodedData = jsonDecode(encoded);
+
       setState(() {
-        semesters = decodedData.map((item) => Semester.fromJson(item)).toList();
-      });
-    } else{
-      setState((){
-        semesters = [Semester(semesterName: "Semester 1", courses : [])];
+        semesters = decodedData
+            .map((item) => Semester.fromJson(item))
+            .toList();
       });
     }
   }
 
-  // ====== CALCULATIONS ======
+  // ===== CALCULATION =====
   int get totalCredits {
     int sum = 0;
-
     for (var sem in semesters) {
-      for(var course in sem.courses){
+      for (var course in sem.courses) {
         sum += (course['credits'] as num).toInt();
       }
     }
@@ -66,52 +68,28 @@ class _CreditPageState extends State<CreditPage> {
     return remaining < 0 ? 0 : remaining;
   }
 
-  // ====== UTIL ======
+  // ===== UTIL =====
   String capitalizeWords(String text) {
     return text
         .split(" ")
-        .map(
-          (word) => word.isNotEmpty
-              ? word[0].toUpperCase() + word.substring(1).toLowerCase()
-              : "",
-        )
+        .map((word) => word.isNotEmpty
+            ? word[0].toUpperCase() +
+                word.substring(1).toLowerCase()
+            : "")
         .join(" ");
   }
 
-  // ====== CRUD ======
+  // ===== CRUD =====
   void addCourse(String name, int credits) {
     setState(() {
-      semesters[currentSemesterIndex].courses.add({
-        'name': name, 
-        'credits': credits
-      });
+      semesters[currentSemesterIndex]
+          .courses
+          .add({'name': name, 'credits': credits});
     });
+
     saveCourses();
   }
 
-  void deleteCourse(int index) {
-    setState(() {
-      semesters[currentSemesterIndex].courses.removeAt(index);
-    });
-    saveCourses();
-  }
-
-  void deleteSemester(int index){
-    setState(() {
-      semesters.removeAt(index);
-
-      if (semesters.isEmpty){
-        semesters.add(Semester(semesterName: "Semester 1", courses: []));
-      }
-
-      if(currentSemesterIndex >= semesters.length){
-        currentSemesterIndex = semesters.length - 1;
-      }
-    });
-    saveCourses();
-  }
-
-  // ====== UI HELPERS ======
   void showAddCourseDialog() {
     String name = "";
     String creditInput = "";
@@ -125,11 +103,13 @@ class _CreditPageState extends State<CreditPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                decoration: const InputDecoration(labelText: "Course Name"),
+                decoration:
+                    const InputDecoration(labelText: "Course Name"),
                 onChanged: (value) => name = value,
               ),
               TextField(
-                decoration: const InputDecoration(labelText: "Credits"),
+                decoration:
+                    const InputDecoration(labelText: "Credits"),
                 keyboardType: TextInputType.number,
                 onChanged: (value) => creditInput = value,
               ),
@@ -154,149 +134,170 @@ class _CreditPageState extends State<CreditPage> {
     );
   }
 
-  // ====== BUILD UI ======
+  // ===== UI =====
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).colorScheme;
+
     return Scaffold(
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 85),
         child: FloatingActionButton(
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
           onPressed: showAddCourseDialog,
           child: const Icon(Icons.add),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Total Credits: $totalCredits",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
 
-            const SizedBox(height: 10),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 140),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16), 
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 10),
 
-            LinearProgressIndicator(
-              value: (totalCredits / graduationCredits).clamp(0.0, 1.0),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              "$totalCredits / $graduationCredits credits",
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-
-            const SizedBox(height: 5),
-
-            Text(
-              "Remaining: $remainingCredits credits",
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: (){
-                  setState(() {
-                      semesters.add(Semester(semesterName: "Semester ${semesters.length + 1}", courses: []));
-
-                    currentSemesterIndex = semesters.length - 1;
-                  });
-                  saveCourses();
-                },
-                icon: const Icon(Icons.add),
-                label: const Text("New Semester"),
-              )
-          ],
-          ),
-        const SizedBox(height: 10),
-
-        Expanded(
-          child: semesters.isEmpty ? const Center(child: Text("No semesters added yet")) : ListView.builder(
-            itemCount: semesters.length,
-            itemBuilder: (context, index) {
-              final semester = semesters[index];
-
-              List<Widget> courseWidgets = semester.courses.asMap().entries.map((entry){
-                return Card(
-                  child: ListTile(
-                    title: Text(capitalizeWords(entry.value['name'])),
-                    subtitle: Text("${entry.value['credits']} credits"),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: (){
-                        setState(() {
-                          semester.courses.removeAt(entry.key);
-                        });
-                        saveCourses();
-                      },
-                    ),
+                // TOTAL CREDITS
+                Text(
+                  "Total Credits: $totalCredits",
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: theme.onSurface,
                   ),
-                );
-              }).toList();
+                ),
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const SizedBox(height: 10),
+
+                LinearProgressIndicator(
+                  value:
+                      (totalCredits / graduationCredits).clamp(0.0, 1.0),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  "$totalCredits / $graduationCredits credits",
+                  style: TextStyle(color: theme.onSurfaceVariant),
+                ),
+                Text(
+                  "Remaining: $remainingCredits credits",
+                  style: TextStyle(color: theme.onSurfaceVariant),
+                ),
+
+                const SizedBox(height: 20),
+
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      semesters.add(Semester(
+                          semesterName:
+                              "Semester ${semesters.length + 1}",
+                          courses: []));
+                      currentSemesterIndex =
+                          semesters.length - 1;
+                    });
+                    saveCourses();
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text("New Semester"),
+                ),
+
+                const SizedBox(height: 20),
+
+                // SEMESTERS
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: semesters.length,
+                  itemBuilder: (context, index) {
+                    final semester = semesters[index];
+
+                    return Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(children: [
-                              Text(
-                                semester.semesterName,
-                                style: const TextStyle(
-                                fontSize: 20, 
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white // Or your theme color
-                                ),
+                            Text(
+                              semester.semesterName,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: theme.onSurface,
                               ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
-                                onPressed: () => deleteSemester(index),
-                              ),
-                            ],
                             ),
-                            TextButton.icon(
+                            TextButton(
                               onPressed: () {
-                                setState((){
-                                  currentSemesterIndex = index;
+                                setState(() {
+                                  currentSemesterIndex =
+                                      index;
                                 });
                                 showAddCourseDialog();
                               },
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text("Add course"),
+                              child: const Text("+ Add course"),
                             ),
                           ],
                         ),
-                      ),
-                      ...courseWidgets,
-                      const SizedBox(height: 30),
-                    ],
-                  );
-                },
-              ),
+
+                        const SizedBox(height: 10),
+
+                        ...semester.courses
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(16),
+                            ),
+                            color: theme.surfaceContainer,
+                            child: ListTile(
+                              title: Text(
+                                capitalizeWords(
+                                    entry.value['name']),
+                                style: TextStyle(
+                                  color: theme.onSurface,
+                                ),
+                              ),
+                              subtitle: Text(
+                                "${entry.value['credits']} credits",
+                                style: TextStyle(
+                                  color:
+                                      theme.onSurfaceVariant,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: Icon(
+                                  Icons.delete,
+                                  color:
+                                      theme.onSurfaceVariant,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    semesters[index]
+                                        .courses
+                                        .removeAt(
+                                            entry.key);
+                                  });
+                                  saveCourses();
+                                },
+                              ),
+                            ),
+                          );
+                        }),
+
+                        const SizedBox(height: 24),
+                      ],
+                    );
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

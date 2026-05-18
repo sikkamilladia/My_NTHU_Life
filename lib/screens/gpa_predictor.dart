@@ -4,16 +4,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
 
 class GPAPredictor extends StatefulWidget {
-  const GPAPredictor({super.key});
+  final String studentID;
+
+  const GPAPredictor({super.key, required this.studentID});
 
   @override
   State<GPAPredictor> createState() => _GPAPredictorState();
 }
 
 class _GPAPredictorState extends State<GPAPredictor> {
-  final List<Map<String, dynamic>> _courses = [
-    {'name': '', 'credits': 3, 'grade': null},
-  ];
+  List<Map<String, dynamic>> _courses = [];
 
   final Map<String, double> _gradePoints = {
     'A+': 4.3,
@@ -30,15 +30,85 @@ class _GPAPredictorState extends State<GPAPredictor> {
     'X': 0.0,
   };
 
+  @override
+  void initState() {
+    super.initState();
+    loadCoursesFromCredit().then((_) {
+      loadGrades();
+    });
+  }
+
+  // LOAD COURSE
+  Future<void> loadCoursesFromCredit() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? encoded = prefs.getString("Semesters_${widget.studentID}");
+
+    if (encoded != null) {
+      final List<dynamic> decodedData = jsonDecode(encoded);
+
+      List<Map<String, dynamic>> allCourses = [];
+
+      for (var sem in decodedData) {
+        List courses = sem['courses'];
+
+        for (var course in courses) {
+          allCourses.add({
+            'name': course['name'] ?? 'Unknown',
+            'credits': (course['credits'] ?? 0),
+            'grade': null,
+          });
+        }
+      }
+
+      setState(() {
+        _courses = allCourses;
+      });
+    }
+  }
+
+  // SAVE GRADE
+  Future<void> saveGrades() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      "Grades_${widget.studentID}",
+      jsonEncode(_courses),
+    );
+  }
+
+  // LOAD GRADE
+  Future<void> loadGrades() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? data = prefs.getString("Grades_${widget.studentID}");
+
+    if (data != null) {
+      List<Map<String, dynamic>> saved =
+          List<Map<String, dynamic>>.from(jsonDecode(data));
+
+      for (int i = 0; i < _courses.length; i++) {
+        if (i < saved.length) {
+          _courses[i]['grade'] = saved[i]['grade'];
+        }
+      }
+
+      setState(() {});
+    }
+  }
+
+  // CALCULATE GPA
   double _calculateGPA() {
     double totalPoints = 0;
     double totalCredits = 0;
+
     for (var course in _courses) {
-      double credits = course['credits'].toDouble();
+      if (course['grade'] == null) continue;
+
+      double credits = (course['credits'] as num).toDouble();
       double point = _gradePoints[course['grade']] ?? 0.0;
+
       totalPoints += (credits * point);
       totalCredits += credits;
     }
+
     return totalCredits == 0 ? 0.0 : totalPoints / totalCredits;
   }
 
@@ -55,6 +125,7 @@ class _GPAPredictorState extends State<GPAPredictor> {
       ),
       body: Column(
         children: [
+          // GPA DISPLAY
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 30),
@@ -84,109 +155,98 @@ class _GPAPredictorState extends State<GPAPredictor> {
               ],
             ),
           ),
+
+          // COURSE LIST
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(top: 10, bottom: 80),
-              itemCount: _courses.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        TextField(
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: 'Course Name (e.g. Calculus)',
-                            hintStyle: TextStyle(color: Colors.white38),
-                            border: InputBorder.none,
-                            icon: Icon(Icons.book_outlined, size: 20),
-                          ),
-                          onChanged: (val) => _courses[index]['name'] = val,
-                        ),
-                        const Divider(color: Colors.white10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<int>(
-                                value: _courses[index]['credits'],
-                                decoration: const InputDecoration(
-                                  labelText: 'Credits',
+            child: _courses.isEmpty
+                ? const Center(child: Text("No courses found 😢"))
+                : ListView.builder(
+                    padding: const EdgeInsets.only(top: 10, bottom: 80),
+                    itemCount: _courses.length,
+                    itemBuilder: (context, index) {
+                      return Card(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            children: [
+                              // COURSE NAME
+                              Text(
+                                _courses[index]['name'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
                                 ),
-                                items: [1, 2, 3, 4]
-                                    .map(
-                                      (c) => DropdownMenuItem(
-                                        value: c,
-                                        child: Text('$c'),
+                              ),
+
+                              const Divider(),
+
+                              Row(
+                                children: [
+                                  // CREDITS
+                                  Expanded(
+                                    child: Text(
+                                      "${_courses[index]['credits']} credits",
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (val) => setState(
-                                  () => _courses[index]['credits'] = val,
-                                ),
+                                    ),
+                                  ),
+
+                                  // DROPDOWN
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      value:
+                                          _courses[index]['grade'],
+                                      dropdownColor: Theme.of(context)
+                                          .colorScheme
+                                          .surface,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                      hint: Text(
+                                        '-',
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                      ),
+                                      items: _gradePoints.keys
+                                          .map((g) {
+                                        return DropdownMenuItem(
+                                          value: g,
+                                          child: Text(g),
+                                        );
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _courses[index]['grade'] =
+                                              val;
+                                        });
+                                        saveGrades();
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: 15),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _courses[index]['grade'],
-                                hint: const Text('-'),
-                                decoration: const InputDecoration(
-                                  labelText: 'Grade',
-                                  helperText: ''
-                                ),
-                                items: _gradePoints.keys.map((g) {
-                                      return DropdownMenuItem(
-                                        value: g,
-                                        child: Text(g),
-                                      );
-                                }).toList(),
-                                validator: (value){
-                                  if(value == null || value.trim().isEmpty){
-                                    return "Please select a grade";
-                                  }
-                                  return null;
-                                },
-                                onChanged: (val) => setState(
-                                  () => _courses[index]['grade'] = val,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.redAccent,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  if (_courses.length > 1){
-                                    _courses.removeAt(index);
-                                  }
-                                });
-                              },
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 85),
-        child: FloatingActionButton.extended(
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-          onPressed: () => setState(
-            () => _courses.add({'name': '', 'credits': 3, 'grade': null}),
-          ),
-          label: const Text('Add Subject'),
-          icon: const Icon(Icons.add),
-        ),
       ),
     );
   }

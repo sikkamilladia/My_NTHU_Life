@@ -28,7 +28,7 @@ class _HomeState extends State<Home> {
     _pages = [
       _HomePage(studentID: widget.studentID),
       CreditPage(studentID: widget.studentID),
-      GPAPredictor(),
+      GPAPredictor(studentID: widget.studentID),
       Center(
         child: Text(
           "Notes Page",

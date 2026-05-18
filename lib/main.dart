@@ -92,7 +92,7 @@ class MyApp extends StatelessWidget {
                 backgroundColor: kColorScheme.primaryContainer,
               ),
             ),
-            textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme)
+            textTheme: GoogleFonts.outfitTextTheme(ThemeData().textTheme)
                 .copyWith(
                   titleLarge: GoogleFonts.outfit(
                     fontSize: 40,
