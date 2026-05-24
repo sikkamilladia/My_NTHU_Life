@@ -50,7 +50,7 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
       name: name,
       currentLevel: 1,
       growthPoints: 0,
-      currentStreak: 1,
+      currentStreak: 7, // sementara ubah ke 7
       currentStage: 'egg',
       coins: 0
     );
@@ -73,7 +73,9 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
         expReward: 20,
         coinReward: 5,
       );
-
+      // debug untuk check apakah exp multiplier dan streak sudah benar
+      //print(_currentPet!.currentStreak);
+      //print(_currentPet!.expMultiplier);
     });
       /*
       _currentPet!.growthPoints += 20;

@@ -49,10 +49,25 @@ class PetProvider with ChangeNotifier {
     final today = DateTime.now();
     final daysDifference = calculateDaysDifference(lastLoginDate, today);
 
-    if (daysDifference == 1) { //Kalo difference day cmn 1, itu berarti consecutive days cmn beda sehari
+    /*if (daysDifference == 1) { //Kalo difference day cmn 1, itu berarti consecutive days cmn beda sehari
     } else if (daysDifference > 1) {
       _currentPet!.currentStreak = 0;
       _currentPet!.currentStage = 'sad_egg';
+      savePet(studentID);
+    }*/
+    if (daysDifference == 1) {
+
+      // consecutive login
+      _currentPet!.currentStreak += 1;
+
+      savePet(studentID);
+
+    } else if (daysDifference > 1) {
+
+      // streak broken
+      _currentPet!.currentStreak = 0;
+      _currentPet!.currentStage = 'sad_egg';
+
       savePet(studentID);
     }
   }
