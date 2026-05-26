@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_nthu_life/data/studentData.dart';
 import '../widgets/auth_widgets.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class SignUp extends StatefulWidget {
   final VoidCallback onSwitchToLogin;
@@ -22,41 +21,36 @@ class _SignUpState extends State<SignUp> {
   String? _error;
 
   void _handleSignup() async {
-  setState(() => _error = null);
+    setState(() => _error = null);
 
-  if (id.isEmpty || password.isEmpty || confirm.isEmpty) {
-    setState(() => _error = 'Please fill in all fields.');
-    return;
-  }
+    if (id.isEmpty || password.isEmpty || confirm.isEmpty) {
+      setState(() => _error = 'Please fill in all fields.');
+      return;
+    }
+    if (password != confirm) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+    if (studentDatabase.containsKey(id)) {
+      setState(() => _error = 'Student ID already registered.');
+      return;
+    }
 
-  if (password != confirm) {
-    setState(() => _error = 'Passwords do not match.');
-    return;
-  }
+    studentDatabase[id] = password;
+    await saveUsers();
 
-  try {
-    String email = "$id@mynthu.com";
-    print(email);
-    await FirebaseAuth.instance.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    print("SIGNUP SUCCESS");
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Account created! Please log in.'),
         backgroundColor: const Color(0xFF4CAF50),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
 
     widget.onSwitchToLogin();
-  } on FirebaseAuthException catch (e) {
-    print("ERROR CODE: ${e.code}");
-    print("ERROR MESSAGE: ${e.message}");
-    setState(() => _error = "${e.code}: ${e.message}");  
-    }
   }
 
   @override

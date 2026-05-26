@@ -9,7 +9,7 @@ import 'transcript.dart';
 import 'gpa_predictor.dart';
 
 class Home extends StatefulWidget {
-  final String studentID; // This will now hold the email
+  final String studentID;
 
   const Home({super.key, required this.studentID});
 
@@ -142,7 +142,7 @@ class _HomeState extends State<Home> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.studentID, // Displays the email
+                            widget.studentID,
                             style: GoogleFonts.outfit(
                               fontWeight: FontWeight.bold,
                               fontSize: 18,
@@ -292,7 +292,7 @@ class _HomeState extends State<Home> {
 // ====== SIDE DRAWER ======
 class _SideDrawer extends StatelessWidget {
   final Animation<double> animation;
-  final String studentID; // This will now hold the email
+  final String studentID;
   final bool isDark;
   final VoidCallback onThemeToggle;
   final VoidCallback onLogout;
@@ -366,7 +366,7 @@ class _SideDrawer extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          studentID, // Displays the email
+                          studentID,
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -487,7 +487,7 @@ class _DrawerTile extends StatelessWidget {
 
 // ====== HOME PAGE ======
 class _HomePage extends StatelessWidget {
-  final String studentID; // This will now hold the email
+  final String studentID;
 
   const _HomePage({required this.studentID});
 
@@ -531,7 +531,7 @@ class _HomePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  studentID, // Displays the email
+                  studentID,
                   style: GoogleFonts.outfit(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,

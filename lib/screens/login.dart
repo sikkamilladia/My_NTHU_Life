@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:my_nthu_life/data/studentData.dart'; // Pastikan file ini menggunakan email sebagai kunci
+import 'package:my_nthu_life/data/studentData.dart';
 import '../widgets/auth_widgets.dart';
 import 'home.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class Login extends StatefulWidget {
   final VoidCallback onSwitchToSignup;
@@ -15,38 +14,36 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
-  String id = ''; // Variabel ini sekarang akan menyimpan email
+  String id = '';
   String password = '';
   bool _passwordVisible = false;
   String? _error;
 
-  void _handleLogin() async {
-  setState(() => _error = null);
+  void _handleLogin() {
+    setState(() => _error = null);
 
-  if (id.isEmpty || password.isEmpty) {
-    setState(() => _error = 'Please fill in all fields.');
-    return;
-  }
-
-  try {
-    String email = "$id@mynthu.com";
-    print(email);
-    await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    print("LOGIN SUCCESS");
-    if (!mounted) return;
+    if (id.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please fill in all fields.');
+      return;
+    }
+    if (!studentDatabase.containsKey(id)) {
+      setState(() => _error = 'Student ID not found.');
+      return;
+    }
+    if (studentDatabase[id] != password) {
+      setState(() => _error = 'Incorrect password.');
+      return;
+    }
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => Home(studentID: id),
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => Home(studentID: id),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
-  } on FirebaseAuthException catch (e) {
-    setState(() => _error = e.message);
-    }
   }
 
   @override
@@ -65,8 +62,8 @@ class _LoginState extends State<Login> {
         ),
         const SizedBox(height: 32),
         authInputField(
-          label: "Email", // Label diubah dari "Student ID" menjadi "Email"
-          icon: Icons.email_outlined, // Ikon diubah untuk email
+          label: "Student ID",
+          icon: Icons.badge_outlined,
           onChanged: (v) => id = v,
         ),
         const SizedBox(height: 16),
