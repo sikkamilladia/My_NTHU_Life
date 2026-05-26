@@ -50,7 +50,7 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
       name: name,
       currentLevel: 1,
       growthPoints: 0,
-      currentStreak: 1,
+      currentStreak: 7, // sementara ubah ke 7
       currentStage: 'egg',
       coins: 0
     );
@@ -68,6 +68,16 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
     if (_currentPet == null) return;
 
     setState(() {
+      // use centralized progression system:
+      _currentPet!.completeTaskReward(
+        expReward: 20,
+        coinReward: 5,
+      );
+      // debug untuk check apakah exp multiplier dan streak sudah benar
+      //print(_currentPet!.currentStreak);
+      //print(_currentPet!.expMultiplier);
+    });
+      /*
       _currentPet!.growthPoints += 20;
 
       if (_currentPet!.growthPoints >= 100) {
@@ -80,7 +90,7 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
         if (_currentPet!.currentLevel == 4) _currentPet!.currentStage = 'adult';
       }
     });
-
+    */
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_streak_pet', jsonEncode(_currentPet!.toJson()));
   }
@@ -178,6 +188,7 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(width: 10), // tambah ini buat spacing antara coin sm level.
                   ],
                 ),
                 // Name and Streak Status
@@ -191,8 +202,42 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "Lv. ${pet.currentLevel} 鈥 ${pet.currentStage.toUpperCase()}",
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                        "Lv. ${pet.currentLevel} • ${pet.currentStage.toUpperCase()}",
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Row(
+                        children: [
+                          Text(
+                            pet.rank,
+                            style: TextStyle(
+                              color: _getRankColor(pet.rank),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black26,
+                                  blurRadius: 2,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Text(
+                            " • ${pet.title}",
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -249,6 +294,25 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
         ),
       ),
     );
+  }
+
+  Color _getRankColor(String rank) {
+    switch (rank) {
+      case 'Bronze':
+        return const Color(0xFF8C5A2B);
+
+      case 'Silver':
+        return const Color(0xFF6E7C91);
+
+      case 'Gold':
+        return const Color(0xFFB38B2D);
+
+      case 'Diamond':
+        return const Color(0xFF3AA6A0);
+
+      default:
+        return Colors.black87;
+    }
   }
 
   // Returns the emoji representation based on evolution status

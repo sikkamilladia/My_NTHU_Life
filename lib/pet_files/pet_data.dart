@@ -6,6 +6,9 @@ class StreakPet {
   int currentStreak;
   String currentStage;
   int coins;
+  String rank;
+  String title;
+  double expMultiplier;
 
   StreakPet({
     required this.id,
@@ -15,6 +18,9 @@ class StreakPet {
     this.growthPoints = 0,
     this.currentStreak = 0,
     this.currentStage = 'egg',
+    this.rank = 'Bronze',
+    this.title = 'Sleepy Egg',
+    this.expMultiplier = 1.0,
   });
 
 
@@ -28,6 +34,9 @@ class StreakPet {
       currentStreak: json['currentStreak'] as int,
       currentStage: json['currentStage'] as String,
       coins: json['coins'] ?? 0,
+      rank: json['rank'] ?? 'Bronze',
+      title: json['title'] ?? 'Sleepy Egg',
+      expMultiplier: (json['expMultiplier'] ?? 1.0).toDouble(),
     );
   }
 
@@ -41,6 +50,9 @@ class StreakPet {
       'currentStreak': currentStreak,
       'currentStage': currentStage,
       'coins': coins,
+      'rank': rank,
+      'title': title,
+      'expMultiplier': expMultiplier,
     };
   }
 
@@ -57,19 +69,60 @@ class StreakPet {
     }
   }
 
-  void completeTaskReward({int expReward = 20, int coinReward = 5}) {
-    this.coins += coinReward;
-    this.growthPoints += expReward;
+  void completeTaskReward({
+    int expReward = 20, 
+    int coinReward = 5,
+  }) {
+    // Apply multiplier bonus
+    int boostedEXP = (expReward * expMultiplier).toInt();
 
-    // Level up logic check
-    if (this.growthPoints >= 100) {
-      this.currentLevel += 1;
-      this.growthPoints = 0; // Reset EXP
+    // Add rewards
+    coins += coinReward;
+    growthPoints += boostedEXP;
 
-      // Evolution thresholds
-      if (this.currentLevel == 2) this.currentStage = 'baby';
-      if (this.currentLevel == 3) this.currentStage = 'juvenile';
-      if (this.currentLevel == 4) this.currentStage = 'adult';
+    // Level up loop
+    while (growthPoints >= 100) {
+      growthPoints -= 100;
+      currentLevel += 1;
+    }
+
+    // Evolution stages
+    if (currentLevel >= 10) {
+      currentStage = 'adult';
+    } else if (currentLevel >= 5) {
+      currentStage = 'juvenile';
+    } else if (currentLevel >= 2) {
+      currentStage = 'baby';
+    } else {
+      currentStage = 'egg';
+    }
+
+    // Rank progression
+    if (currentLevel >= 15) {
+      rank = 'Diamond';
+      title = 'Legendary Scholar';
+    } else if (currentLevel >= 10) {
+      rank = 'Gold';
+      title = 'Productivity Wizard';
+    } else if (currentLevel >= 5) {
+      rank = 'Silver';
+      title = 'Focus Apprentice';
+    } else {
+      rank = 'Bronze';
+      title = 'Sleepy Egg';
+    }
+
+    // Chain multiplier system
+    if (currentStreak >= 30) {
+      expMultiplier = 2.5;
+    } else if (currentStreak >= 14) {
+      expMultiplier = 2.0;
+    } else if (currentStreak >= 7) {
+      expMultiplier = 1.5;
+    } else if (currentStreak >= 3) {
+      expMultiplier = 1.2;
+    } else {
+      expMultiplier = 1.0;
     }
   }
 }
