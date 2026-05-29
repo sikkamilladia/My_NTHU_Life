@@ -6,7 +6,7 @@ import 'package:my_nthu_life/screens/task_list_page.dart';
 import 'package:my_nthu_life/widgets/pet_dashboard_widget.dart';
 import 'task_list_page.dart';
 import 'transcript.dart';
-import 'gpa_predictor.dart';
+import 'study.dart';
 
 class Home extends StatefulWidget {
   final String studentID;
