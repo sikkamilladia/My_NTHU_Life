@@ -4,6 +4,10 @@ import 'package:my_nthu_life/screens/auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/theme/theme.dart';
 
+// 1. Core Firebase packages imported here
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart'; 
+
 var kColorScheme = MaterialTheme.lightScheme();
 var kDarkColorScheme = MaterialTheme.darkHighContrastScheme();
 
@@ -14,7 +18,33 @@ final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.dark);
 final totalCreditsNotifier = ValueNotifier<int>(0);
 
 void main() async {
+  // Ensure native bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    print("📡 [Firebase Test] Attempting connection initialization...");
+    
+    // Initialize Firebase
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // --- DIAGNOSTIC CONNECTION CHECK ---
+    final currentApp = Firebase.app();
+    print("---------------------------------------------------------");
+    print("🎉 [Firebase SUCCESS] Connection Established Successfully!");
+    print("📦 Connected Project ID: ${currentApp.options.projectId}");
+    print("🔑 Application ID: ${currentApp.options.appId}");
+    print("---------------------------------------------------------");
+
+  } catch (e) {
+    print("---------------------------------------------------------");
+    print("❌ [Firebase ERROR] Failed to connect to backend!");
+    print("⚠️ Error Details: $e");
+    print("---------------------------------------------------------");
+  }
+
+  // Load local asset users & boot UI
   await loadUsers();
   runApp(const MyApp());
 }
@@ -135,7 +165,7 @@ class MyApp extends StatelessWidget {
                 ),
           ),
           themeMode: mode, // driven by the notifier
-          home: Auth(),
+          home: const Auth(), // Marked const for optimal widget performance
         );
       },
     );

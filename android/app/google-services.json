@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "40087704428",
+    "project_id": "nthyou-eee75",
+    "storage_bucket": "nthyou-eee75.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:40087704428:android:25f8ad664cdcead8881949",
+        "android_client_info": {
+          "package_name": "com.example.my_nthu_life"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZJLkxijsBFqh6EbwuunMhn3PYT3o3dXw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
