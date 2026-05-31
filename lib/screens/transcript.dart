@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/data/semester.dart';
 import 'package:my_nthu_life/main.dart';
+import 'package:my_nthu_life/screens/gpa_calculator.dart';
 import 'dart:convert';
 
 class CreditPage extends StatefulWidget {
@@ -13,19 +14,16 @@ class CreditPage extends StatefulWidget {
 }
 
 class _CreditPageState extends State<CreditPage> {
+  // ===== ACCENT COLORS =====
+  static const purpleMain = Color(0xFF7C3AED);
+  static const purpleDark = Color(0xFF6D28D9);
+  static const purpleLight = Color(0xFFA78BFA);
+
   final int graduationCredits = 128;
   List<Semester> semesters = [
     Semester(semesterName: "Semester 1", courses: []),
   ];
   int currentSemesterIndex = 0;
-
-  // ===== COLORS =====
-  static const bgColor = Color(0xFF1A1520);
-  static const cardColor = Color(0xFF221E2A);
-  static const borderColor = Color(0x33A78BFA);
-  static const purpleMain = Color(0xFF7C3AED);
-  static const purpleLight = Color(0xFFA78BFA);
-  static const purpleDark = Color(0xFF6D28D9);
 
   @override
   void initState() {
@@ -153,10 +151,9 @@ class _CreditPageState extends State<CreditPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final cs = Theme.of(context).colorScheme;
             return Dialog(
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerLow,
+              backgroundColor: cs.surfaceContainerLow,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -166,20 +163,29 @@ class _CreditPageState extends State<CreditPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       "Add Course",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: cs.onSurface,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _dialogTextField("Course Name", onChanged: (v) => name = v),
-                    const SizedBox(height: 12),
-                    _dialogTextField("Course Code", onChanged: (v) => code = v),
+                    _dialogTextField(
+                      context,
+                      "Course Name",
+                      onChanged: (v) => name = v,
+                    ),
                     const SizedBox(height: 12),
                     _dialogTextField(
+                      context,
+                      "Course Code",
+                      onChanged: (v) => code = v,
+                    ),
+                    const SizedBox(height: 12),
+                    _dialogTextField(
+                      context,
                       "Credits",
                       keyboardType: TextInputType.number,
                       onChanged: (v) => creditInput = v,
@@ -189,16 +195,16 @@ class _CreditPageState extends State<CreditPage> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF3F3F46),
+                        color: cs.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF52525B)),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: selectedGrade,
                           isExpanded: true,
-                          dropdownColor: const Color(0xFF3F3F46),
-                          style: const TextStyle(color: Colors.white),
+                          dropdownColor: cs.surfaceContainerHigh,
+                          style: TextStyle(color: cs.onSurface),
                           items: grades
                               .map(
                                 (g) =>
@@ -216,7 +222,8 @@ class _CreditPageState extends State<CreditPage> {
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF6158E4),
+                              backgroundColor: purpleMain,
+                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -229,27 +236,22 @@ class _CreditPageState extends State<CreditPage> {
                               }
                               Navigator.pop(context);
                             },
-                            child: const Text(
-                              "Add",
-                              style: TextStyle(color: Colors.white),
-                            ),
+                            child: const Text("Add"),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3F3F46),
+                              backgroundColor: cs.surfaceContainerHighest,
+                              foregroundColor: cs.onSurfaceVariant,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             onPressed: () => Navigator.pop(context),
-                            child: const Text(
-                              "Cancel",
-                              style: TextStyle(color: Colors.white),
-                            ),
+                            child: const Text("Cancel"),
                           ),
                         ),
                       ],
@@ -265,30 +267,32 @@ class _CreditPageState extends State<CreditPage> {
   }
 
   Widget _dialogTextField(
+    BuildContext context,
     String label, {
     TextInputType keyboardType = TextInputType.text,
     required Function(String) onChanged,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return TextField(
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: cs.onSurface),
       onChanged: onChanged,
       decoration: InputDecoration(
         hintText: label,
-        hintStyle: const TextStyle(color: Color(0xFF71717A)),
+        hintStyle: TextStyle(color: cs.onSurfaceVariant),
         filled: true,
-        fillColor: const Color(0xFF3F3F46),
+        fillColor: cs.surfaceContainerHigh,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF52525B)),
+          borderSide: BorderSide(color: cs.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF52525B)),
+          borderSide: BorderSide(color: cs.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: purpleMain),
+          borderSide: BorderSide(color: purpleMain),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -301,16 +305,29 @@ class _CreditPageState extends State<CreditPage> {
   // ===== UI =====
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final gpa = semesterGPA;
 
+    // Overlay colors: use onSurface with opacity to replicate the
+    // original 0x0D/0x1A/0x33/0x80 white-overlay style, but theme-aware.
+    final containerBg = cs.onSurface.withOpacity(0.05); // was 0x0DFFFFFF
+    final containerBorder = cs.onSurface.withOpacity(0.10); // was 0x1AFFFFFF
+    final purpleOverlay = purpleMain.withOpacity(0.20); // was 0x337C3AED
+    final purpleOverlayLight = purpleMain.withOpacity(0.15); // was 0x267C3AED
+
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: cs.surface,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 85),
+        padding: const EdgeInsets.only(bottom: 5),
         child: FloatingActionButton(
-          onPressed: showAddCourseDialog,
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const GpaCalculatorPage()),
+          ),
           backgroundColor: purpleMain,
-          child: const Icon(Icons.add, color: Colors.white),
+          foregroundColor: Colors.white,
+          tooltip: "GPA Calculator",
+          child: const Icon(Icons.calculate_rounded),
         ),
       ),
       body: SingleChildScrollView(
@@ -323,13 +340,13 @@ class _CreditPageState extends State<CreditPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  children: const [
-                    Icon(Icons.menu_book, color: Color(0xFFD8B4FE), size: 24),
-                    SizedBox(width: 8),
+                  children: [
+                    Icon(Icons.menu_book, color: purpleLight, size: 24),
+                    const SizedBox(width: 8),
                     Text(
                       "Transcript",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: cs.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                       ),
@@ -342,24 +359,22 @@ class _CreditPageState extends State<CreditPage> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0x4D7C3AED), Color(0x337C3AED)],
-                    ),
+                    color: purpleOverlay,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: purpleMain.withOpacity(0.30)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.emoji_events,
-                        color: Color(0xFFFACC15),
+                        color: Colors.amber.shade400,
                         size: 14,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         "${semesters.fold(0, (sum, s) => sum + s.courses.length)} courses",
-                        style: const TextStyle(
-                          color: Color(0xFFFDE047),
+                        style: TextStyle(
+                          color: Colors.amber.shade600,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -376,28 +391,25 @@ class _CreditPageState extends State<CreditPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0x0DFFFFFF),
+                color: containerBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0x1AFFFFFF)),
+                border: Border.all(color: containerBorder),
               ),
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         "Total Credits",
                         style: TextStyle(
-                          color: Color(0xCCFFFFFF),
+                          color: cs.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),
                       Text(
                         "$totalCredits/$graduationCredits",
-                        style: const TextStyle(
-                          color: Color(0xFFD8B4FE),
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: purpleMain, fontSize: 12),
                       ),
                     ],
                   ),
@@ -407,10 +419,8 @@ class _CreditPageState extends State<CreditPage> {
                     child: LinearProgressIndicator(
                       value: (totalCredits / graduationCredits).clamp(0.0, 1.0),
                       minHeight: 6,
-                      backgroundColor: const Color(0x1AFFFFFF),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        purpleMain,
-                      ),
+                      backgroundColor: containerBorder,
+                      valueColor: AlwaysStoppedAnimation<Color>(purpleMain),
                     ),
                   ),
                 ],
@@ -429,7 +439,7 @@ class _CreditPageState extends State<CreditPage> {
                       setState(() => currentSemesterIndex--);
                     }
                   },
-                  icon: const Icon(Icons.chevron_left, color: Colors.white70),
+                  icon: Icon(Icons.chevron_left, color: cs.onSurfaceVariant),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -437,16 +447,14 @@ class _CreditPageState extends State<CreditPage> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0x337C3AED), Color(0x267C3AED)],
-                    ),
+                    color: purpleOverlayLight,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: borderColor),
+                    border: Border.all(color: purpleMain.withOpacity(0.30)),
                   ),
                   child: Text(
                     currentSemester.semesterName,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
@@ -457,7 +465,6 @@ class _CreditPageState extends State<CreditPage> {
                     if (currentSemesterIndex < semesters.length - 1) {
                       setState(() => currentSemesterIndex++);
                     } else {
-                      // Add new semester
                       setState(() {
                         semesters.add(
                           Semester(
@@ -470,7 +477,7 @@ class _CreditPageState extends State<CreditPage> {
                       saveCourses();
                     }
                   },
-                  icon: const Icon(Icons.chevron_right, color: Colors.white70),
+                  icon: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -487,33 +494,36 @@ class _CreditPageState extends State<CreditPage> {
               childAspectRatio: 3.5,
               children: [
                 _statCard(
+                  context,
                   icon: Icons.menu_book,
                   iconColor: purpleLight,
-                  iconBg: const Color(0x337C3AED),
+                  iconBg: purpleOverlay,
                   label: "Credits",
                   value: "$semesterCredits",
                 ),
                 _statCard(
+                  context,
                   icon: Icons.trending_up,
-                  iconColor: const Color(0xFF86EFAC),
-                  iconBg: const Color(0x3322C55E),
+                  iconColor: Colors.green.shade400,
+                  iconBg: Colors.green.withOpacity(0.15),
                   label: "GPA",
                   value: currentSemester.courses.isEmpty
                       ? "0.00"
                       : "${gpa.toStringAsFixed(2)} (${getLetterGrade(gpa)})",
-                  valueColor: Colors.white,
                 ),
                 _statCard(
+                  context,
                   icon: Icons.school,
-                  iconColor: const Color(0xFF93C5FD),
-                  iconBg: const Color(0x333B82F6),
+                  iconColor: Colors.blue.shade300,
+                  iconBg: Colors.blue.withOpacity(0.12),
                   label: "T-Score",
                   value: "–",
                 ),
                 _statCard(
+                  context,
                   icon: Icons.emoji_events,
-                  iconColor: const Color(0xFFFDE047),
-                  iconBg: const Color(0x33EAB308),
+                  iconColor: Colors.amber.shade400,
+                  iconBg: Colors.amber.withOpacity(0.12),
                   label: "Rank",
                   value: "–",
                 ),
@@ -528,13 +538,17 @@ class _CreditPageState extends State<CreditPage> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 32),
                   child: Column(
-                    children: const [
-                      Icon(Icons.menu_book, size: 40, color: Color(0x4DFFFFFF)),
-                      SizedBox(height: 12),
+                    children: [
+                      Icon(
+                        Icons.menu_book,
+                        size: 40,
+                        color: cs.onSurfaceVariant.withOpacity(0.4),
+                      ),
+                      const SizedBox(height: 12),
                       Text(
                         "No courses for this semester",
                         style: TextStyle(
-                          color: Color(0x80FFFFFF),
+                          color: cs.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),
@@ -551,9 +565,9 @@ class _CreditPageState extends State<CreditPage> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0x0DFFFFFF),
+                      color: containerBg,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0x1AFFFFFF)),
+                      border: Border.all(color: containerBorder),
                     ),
                     child: Row(
                       children: [
@@ -562,12 +576,12 @@ class _CreditPageState extends State<CreditPage> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0x337C3AED),
+                            color: purpleOverlay,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.menu_book,
-                            color: purpleLight,
+                            color: purpleMain,
                             size: 18,
                           ),
                         ),
@@ -579,16 +593,16 @@ class _CreditPageState extends State<CreditPage> {
                             children: [
                               Text(
                                 course['name'] ?? '',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: cs.onSurface,
                                   fontSize: 13,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 course['code'] ?? 'Course Code',
-                                style: const TextStyle(
-                                  color: Color(0x66FFFFFF),
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant.withOpacity(0.6),
                                   fontSize: 10,
                                 ),
                               ),
@@ -599,17 +613,17 @@ class _CreditPageState extends State<CreditPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Text(
+                            Text(
                               "Credits",
                               style: TextStyle(
-                                color: Color(0x80FFFFFF),
+                                color: cs.onSurfaceVariant.withOpacity(0.7),
                                 fontSize: 9,
                               ),
                             ),
                             Text(
                               "${course['credits']}",
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: cs.onSurface,
                                 fontSize: 12,
                               ),
                             ),
@@ -621,13 +635,15 @@ class _CreditPageState extends State<CreditPage> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [purpleMain, purpleDark],
                             ),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: borderColor),
+                            border: Border.all(
+                              color: purpleMain.withOpacity(0.4),
+                            ),
                           ),
                           alignment: Alignment.center,
                           child: Text(
@@ -641,9 +657,9 @@ class _CreditPageState extends State<CreditPage> {
                         ),
                         // Delete
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.delete_outline,
-                            color: Color(0x80FFFFFF),
+                            color: cs.onSurfaceVariant.withOpacity(0.5),
                             size: 18,
                           ),
                           onPressed: () {
@@ -664,20 +680,21 @@ class _CreditPageState extends State<CreditPage> {
     );
   }
 
-  Widget _statCard({
+  Widget _statCard(
+    BuildContext context, {
     required IconData icon,
     required Color iconColor,
     required Color iconBg,
     required String label,
     required String value,
-    Color valueColor = Colors.white,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0x0DFFFFFF),
+        color: cs.onSurface.withOpacity(0.05),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0x1AFFFFFF)),
+        border: Border.all(color: cs.onSurface.withOpacity(0.10)),
       ),
       child: Row(
         children: [
@@ -698,15 +715,12 @@ class _CreditPageState extends State<CreditPage> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0x99FFFFFF),
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
                 ),
                 Text(
                   value,
                   style: TextStyle(
-                    color: valueColor,
+                    color: cs.onSurface,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
