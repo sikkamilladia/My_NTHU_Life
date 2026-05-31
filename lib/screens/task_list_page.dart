@@ -5,10 +5,9 @@ import 'package:my_nthu_life/pet_files/pet_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/main.dart';
-import 'package:my_nthu_life/pet_files/pet_data.dart';
 import 'package:my_nthu_life/data/semester.dart';
 
-class TaskListPage extends StatefulWidget{
+class TaskListPage extends StatefulWidget {
   final String studentID;
 
   const TaskListPage({super.key, required this.studentID});
@@ -17,23 +16,34 @@ class TaskListPage extends StatefulWidget{
   State<TaskListPage> createState() => _TaskListPageState();
 }
 
-class _TaskListPageState extends State<TaskListPage>{
+class _TaskListPageState extends State<TaskListPage> {
   List<String> _courseNames = [];
   Map<String, List<dynamic>> _tasksByCourse = {};
   bool _isLoading = true;
 
   final List<String> _categories = ['Homework', 'Quiz', 'Midterm', 'Final', 'Project', 'Other'];
+  
+  // State management for tracking the calendar matrix state
+  late DateTime _focusedMonth;
+  int? _selectedDay; 
+
+  final List<String> _weekLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  final List<String> _monthLabels = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
 
   @override
-  void initState(){
+  void initState() {
     super.initState();
+    _focusedMonth = DateTime.now();
+    _selectedDay = DateTime.now().day;
     _loadData();
   }
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 1. Pull the live courses added from credit_page.dart / transcript.dart
     String? semestersEncoded = prefs.getString("Semesters_${widget.studentID}");
     List<String> extractedCourses = [];
 
@@ -53,7 +63,6 @@ class _TaskListPageState extends State<TaskListPage>{
       }
     }
 
-    // 2. Pull saved quest logs for these courses
     String? tasksEncoded = prefs.getString("CourseTasks_${widget.studentID}");
     Map<String, List<dynamic>> loadedTasks = {};
     if (tasksEncoded != null) {
@@ -70,125 +79,166 @@ class _TaskListPageState extends State<TaskListPage>{
     });
   }
 
-  // ===== SAVE USER QUEST TASKS =====
   Future<void> _saveTasks() async {
     final prefs = await SharedPreferences.getInstance();
     String encoded = jsonEncode(_tasksByCourse);
     await prefs.setString("CourseTasks_${widget.studentID}", encoded);
   }
 
-  // ===== PET REWARD LOGIC =====
-  Future<void> _claimQuestRewards(int exp, int coins) async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? petJson = prefs.getString('user_streak_pet');
-
-    if (petJson != null) {
-      final pet = StreakPet.fromJson(Map<String, dynamic>.from(jsonDecode(petJson)));
-      
-      pet.completeTaskReward(expReward: exp, coinReward: coins);
-      
-      await prefs.setString('user_streak_pet', jsonEncode(pet.toJson()));
-      
-      // Update global listenable to instantly refresh the homepage dashboard container
-      totalCreditsNotifier.value = totalCreditsNotifier.value;
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✨ Quest Cleared! Jamil received +$exp EXP & +$coins Coins!'),
-          backgroundColor: Colors.green.shade700,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'Homework': return const Color(0xFF9D4EDD); // Medium Purple
+      case 'Quiz': return const Color(0xFFC77DFF);     // Vibrant Light Purple
+      case 'Midterm': return const Color(0xFFE0AAFF);  // Pale Lavender
+      case 'Final': return const Color(0xFF5A189A);    // Intense Dark Purple
+      case 'Project': return const Color(0xFF00CEC9);  // Tech Cyan contrast
+      default: return const Color(0xFF7B2CBF);
     }
   }
 
-  Color _getCategoryColor(String category){
-    switch(category){
-      case 'Homework': 
-        return Colors.blue.shade600;
-      case 'Quiz': 
-        return Colors.orange.shade600;
-      case 'Midterm': 
-        return Colors.red.shade600;
-      case 'Final': 
-        return Colors.purple.shade600;
-      case 'Project': 
-        return Colors.teal.shade600;
-      default: 
-        return Colors.grey.shade600;
-    }
+  bool _dayHasActiveTasks(int day) {
+    bool hasTasks = false;
+    _tasksByCourse.forEach((course, tasks) {
+      for (var task in tasks) {
+        if (task['assignedDayString'] == _getDayStringKey(day) && task['isDone'] == false) {
+          hasTasks = true;
+        }
+      }
+    });
+    return hasTasks;
   }
 
-  // ===== DIALOG FOR ADDING A TASK TO A SPECIFIC COURSE =====
-  void _showAddTaskDialog(String courseName) {
+  String _getDayStringKey(int day) {
+    return "${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
+  }
+
+  // Google Calendar style Month shifting mechanics
+  void _previousMonth() {
+    setState(() {
+      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+      _selectedDay = 1; // Default selector reset anchor point
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+      _selectedDay = 1;
+    });
+  }
+
+  void _showAddTaskDialog() {
+    if (_selectedDay == null) return;
     String taskTitle = "";
     String selectedCategory = _categories.first;
+    
+    // Initialize with a default value or blank text depending on if courses exist
+    String selectedCourse = _courseNames.isNotEmpty ? _courseNames.first : "";
+    TextEditingController customCourseController = TextEditingController(text: selectedCourse);
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setDialogState){
+          builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text("Add Task for $courseName", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: "Task Description (e.g., Midterm 2, Chapter 4)",
-                      hintText: "E.g. Review Chapter 2, Finish lab report",
-                    ),
-                    onChanged: (value) => taskTitle = value,
-                  ),
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: 180,
-                    child: DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      decoration: const InputDecoration(
-                        labelText: "Task Category",
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _categories.map((String category){
-                        return DropdownMenuItem<String>(
-                          value: category,
-                          child: Text(
-                            category,
-                            style: TextStyle(fontSize: 14),
+              backgroundColor: const Color(0xFF16121E), // Deep Dark Purple Card Background
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Color(0xFF3C096C), width: 1.5),
+              ),
+              title: Text(
+                "Assign Matrix Quest", 
+                style: GoogleFonts.orbitron(fontWeight: FontWeight.bold, color: const Color(0xFFE0AAFF), fontSize: 16),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Dynamic Course Input Selector Block
+                    _courseNames.isNotEmpty
+                        ? DropdownButtonFormField<String>(
+                            dropdownColor: const Color(0xFF16121E),
+                            value: selectedCourse,
+                            style: GoogleFonts.outfit(color: Colors.white),
+                            decoration: const InputDecoration(
+                              labelText: "Target Course", 
+                              labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF3C096C))),
+                            ),
+                            items: _courseNames.map((name) => DropdownMenuItem(value: name, child: Text(name, overflow: TextOverflow.ellipsis))).toList(),
+                            onChanged: (val) { 
+                              if (val != null) {
+                                setDialogState(() {
+                                  selectedCourse = val;
+                                  customCourseController.text = val;
+                                });
+                              }
+                            },
+                          )
+                        : TextField(
+                            controller: customCourseController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(
+                              labelText: "Target Course Name", 
+                              labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                              hintText: "e.g. Calculus I",
+                              hintStyle: TextStyle(color: Colors.white24),
+                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF3C096C))),
+                            ),
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (newValue){
-                        if (newValue != null){
-                          setDialogState((){
-                            selectedCategory = newValue;
-                          });
-                        }
-                      },
+                    const SizedBox(height: 12),
+                    TextField(
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: "Quest Title", 
+                        labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                        hintText: "e.g. Complete Lab Report analysis",
+                        hintStyle: TextStyle(color: Colors.white24),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF3C096C))),
+                      ),
+                      onChanged: (value) => taskTitle = value,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      dropdownColor: const Color(0xFF16121E),
+                      value: selectedCategory,
+                      style: GoogleFonts.outfit(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: "Category",
+                        labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF3C096C))),
+                      ),
+                      items: _categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                      onChanged: (val) { if (val != null) setDialogState(() => selectedCategory = val); },
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
+                  onPressed: () => Navigator.pop(context), 
+                  child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
                 ),
                 TextButton(
                   onPressed: () {
+                    String finalCourseName = customCourseController.text.trim();
+                    if (finalCourseName.isEmpty) {
+                      finalCourseName = "General Task";
+                    }
+
                     if (taskTitle.trim().isNotEmpty) {
                       setState(() {
-                        if (_tasksByCourse[courseName] == null) {
-                          _tasksByCourse[courseName] = [];
+                        if (_tasksByCourse[finalCourseName] == null) {
+                          _tasksByCourse[finalCourseName] = [];
                         }
-                        _tasksByCourse[courseName]!.add({
+                        _tasksByCourse[finalCourseName]!.add({
                           'id': DateTime.now().millisecondsSinceEpoch.toString(),
                           'title': taskTitle.trim(),
+                          'category': selectedCategory,
                           'isDone': false,
-                          'exp': 20,  // Standard custom quest rewards
+                          'assignedDayString': _getDayStringKey(_selectedDay!),
+                          'exp': 20,
                           'coins': 5,
                         });
                       });
@@ -196,188 +246,302 @@ class _TaskListPageState extends State<TaskListPage>{
                     }
                     Navigator.pop(context);
                   },
-                  child: const Text("Create"),
+                  child: Text(
+                    "Confirm", 
+                    style: GoogleFonts.orbitron(color: const Color(0xFFC77DFF), fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
-        });
+          },
+        );
       },
     );
   }
 
-  String capitalizeWords(String text) {
-    return text
-        .split(" ")
-        .map((word) => word.isNotEmpty
-            ? word[0].toUpperCase() + word.substring(1).toLowerCase()
-            : "")
-        .join(" ");
-  }
-
-  // ===== UI MATRIX =====
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).colorScheme;
+    const Color bgBlack = Color(0xFF0B090A);        // True abyss background
+    const Color cardDarkPurple = Color(0xFF16121E); // deep space dark container purple
+    const Color neonLightPurple = Color(0xFFC77DFF);
 
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(backgroundColor: bgBlack, body: Center(child: CircularProgressIndicator(color: neonLightPurple)));
+    }
+
+    // Grid calculations
+    int daysInMonth = DateUtils.getDaysInMonth(_focusedMonth.year, _focusedMonth.month);
+    int firstWeekdayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1).weekday; 
+    int prefixEmptyCells = firstWeekdayOfMonth - 1; 
+    int totalGridCells = prefixEmptyCells + daysInMonth;
+
+    // Filter list context matching selection index configurations
+    List<Map<String, dynamic>> activeDayQuests = [];
+    if (_selectedDay != null) {
+      String targetKey = _getDayStringKey(_selectedDay!);
+      _tasksByCourse.forEach((courseName, tasks) {
+        for (var task in tasks) {
+          if (task['assignedDayString'] == targetKey) {
+            activeDayQuests.add({
+              'course': courseName,
+              'taskData': task,
+            });
+          }
+        }
+      });
     }
 
     return Scaffold(
+      backgroundColor: bgBlack,
       appBar: AppBar(
-        title: Text("Study Quest Board", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData, // Manual sync option if they come directly from Transcript adjustments
-          ),
-        ],
+        backgroundColor: bgBlack,
+        elevation: 0,
+        title: Text(
+          "TIMELINE ARCHIVE", 
+          style: GoogleFonts.orbitron(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5),
+        ),
+        centerTitle: true,
       ),
-      body: _courseNames.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Text(
-                  "No courses found! Add courses in your Transcript/Credit page first to generate quest lines.",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(fontSize: 16, color: theme.onSurfaceVariant),
-                ),
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
-              itemCount: _courseNames.length,
-              itemBuilder: (context, index) {
-                final courseName = _courseNames[index];
-                final tasks = _tasksByCourse[courseName] ?? [];
-
-                return Card(
-                  margin: const EdgeInsets.all(16.0),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header showing Transcript Course
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Row(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  children: [
+                    // Main Dark Aesthetic Calendar Frame Box
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: cardDarkPurple, 
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0xFF240046), width: 1.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Select structural nodes to allocate tasks",
+                            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF7B2CBF), fontWeight: FontWeight.w400),
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // Google Calendar Style Paging Header Bar
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
                                 children: [
-                                  Icon(Icons.bookmark_added_rounded, color: theme.primary),
+                                  Text(
+                                    _monthLabels[_focusedMonth.month - 1],
+                                    style: GoogleFonts.orbitron(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
                                   const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      capitalizeWords(courseName),
-                                      style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                  Text(
+                                    "${_focusedMonth.year}",
+                                    style: GoogleFonts.orbitron(fontSize: 14, color: const Color(0xFF9D4EDD)),
                                   ),
                                 ],
                               ),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.add_task, color: theme.primary),
-                              onPressed: () => _showAddTaskDialog(courseName),
-                              tooltip: "Add Quest Task",
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 16),
-
-                        // Sub-Task Checklist Loop
-                        tasks.isEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                child: Text(
-                                  "No active study quests. Tap the icon above to assign tasks!",
-                                  style: TextStyle(fontSize: 13, color: theme.onSurfaceVariant, fontStyle: FontStyle.italic),
-                                ),
+                              // Navigation controls
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.chevron_left, color: neonLightPurple),
+                                    onPressed: _previousMonth,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.chevron_right, color: neonLightPurple),
+                                    onPressed: _nextMonth,
+                                  ),
+                                ],
                               )
-                            : Column(
-                                children: tasks.asMap().entries.map((entry) {
-                                  var task = entry.value;
-                                  String category = task['category'] ?? 'Other';
+                            ],
+                          ),
+                          const SizedBox(height: 16),
 
-                                  return CheckboxListTile(
-                                    activeColor: theme.primary,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: _getCategoryColor(category).withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: _getCategoryColor(category), width: 1)
-                                          ),
-                                          child: Text(
-                                            category,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: _getCategoryColor(category)
-                                            ),
+                          // Days of week header strip
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: _weekLabels.map((day) => Expanded(
+                              child: Center(
+                                child: Text(
+                                  day, 
+                                  style: GoogleFonts.orbitron(fontSize: 9, fontWeight: FontWeight.bold, color: const Color(0xFF5A189A))
+                                ),
+                              ),
+                            )).toList(),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Dynamic Month Grid Matrix
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: totalGridCells,
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 7,
+                              mainAxisSpacing: 6,
+                              crossAxisSpacing: 6,
+                              childAspectRatio: 1,
+								),
+                            itemBuilder: (context, index) {
+                              if (index < prefixEmptyCells) {
+                                return const SizedBox.shrink();
+                              }
+
+                              int dayNumber = index - prefixEmptyCells + 1;
+                              bool isSelected = dayNumber == _selectedDay;
+                              bool hasTask = _dayHasActiveTasks(dayNumber);
+                              bool isToday = dayNumber == DateTime.now().day && 
+                                             _focusedMonth.month == DateTime.now().month && 
+                                             _focusedMonth.year == DateTime.now().year;
+
+                              return GestureDetector(
+                                onTap: () => setState(() => _selectedDay = dayNumber),
+                                child: Stack(
+                                  children: [
+                                    // Individual day element tile
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 150),
+                                      decoration: BoxDecoration(
+                                        color: isSelected 
+                                            ? const Color(0xFF3C096C) 
+                                            : (isToday ? const Color(0xFF240046) : Colors.transparent),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: isSelected ? neonLightPurple : (isToday ? const Color(0xFF7B2CBF) : Colors.white10),
+                                          width: 1.2,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          dayNumber.toString().padLeft(2, '0'),
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 13,
+                                            fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w400,
+                                            color: isSelected ? Colors.white : (isToday ? neonLightPurple : Colors.grey.shade400),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-
-                                        Expanded(
-                                          child: Text(
-                                            task['title'],
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 15,
-                                              decoration: task['isDone'] ? TextDecoration.lineThrough : null,
-                                              color: task['isDone'] ? Colors.grey : theme.onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    subtitle: Padding(
-                                      padding: const EdgeInsets.only(top: 4.0),
-                                      child: Row(
-                                        children: [
-                                          Text("🔥 ${task['exp']} EXP", style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
-                                          const SizedBox(width: 12),
-                                          Text("🪙 ${task['coins']} Coins", style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600)),
-                                        ],
                                       ),
                                     ),
-                                    value: task['isDone'],
-                                    onChanged: task['isDone']
-                                        ? null // Prevent farming completed quests
-                                        : (bool? value) {
-                                            setState(() {
-                                              task['isDone'] = true;
-                                            });
-                                            _saveTasks();
 
-                                            Provider.of<PetProvider>(context, listen: false).awardGrowthPoints(
-                                              studentID: widget.studentID,
-                                              exp: task['exp'],
-                                              coins: task['coins'],
-                                            );
-
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('✨ Quest Cleared! Your pet received +${task['exp']} EXP & +${task['coins']} Coins!'),
-                                                backgroundColor: Colors.green.shade700,
-                                                duration: const Duration(seconds: 2),
-                                              ),
-                                            );
-                                          },
-                                  );
-                                }).toList(),
-                              ),
-                      ],
+                                    // Crown indicator mapping presence overlay
+                                    if (hasTask)
+                                      const Positioned(
+                                        top: 2,
+                                        right: 2,
+                                        child: Text(
+                                          "👑", 
+                                          style: TextStyle(fontSize: 8),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+
+                    const SizedBox(height: 20),
+
+                    // Daily Schedule Cards Under the Calendar Frame
+                    if (_selectedDay != null) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4.0, bottom: 10),
+                          child: Text(
+                            "SCHEDULED TASKS • ${_monthLabels[_focusedMonth.month - 1].toUpperCase()} $_selectedDay",
+                            style: GoogleFonts.orbitron(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF9D4EDD), letterSpacing: 1),
+                          ),
+                        ),
+                      ),
+                      activeDayQuests.isEmpty
+                          ? Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: cardDarkPurple, 
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFF16121E))
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "No tasks assigned to this timeline node.", 
+                                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13)
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: activeDayQuests.length,
+                              itemBuilder: (context, index) {
+                                final questItem = activeDayQuests[index];
+                                final String courseName = questItem['course'];
+                                final Map<String, dynamic> task = questItem['taskData'];
+                                final String category = task['category'] ?? 'Other';
+                                final Color catColor = _getCategoryColor(category);
+
+                                return Card(
+                                  color: cardDarkPurple,
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    side: BorderSide(color: const Color(0xFF240046).withOpacity(0.5))
+                                  ),
+                                  child: ListTile(
+                                    leading: Container(width: 4, height: 26, color: catColor),
+                                    title: Text(
+                                      task['title'], 
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        decoration: task['isDone'] ? TextDecoration.lineThrough : null,
+                                        decorationColor: Colors.grey
+                                      )
+                                    ),
+                                    subtitle: Text(
+                                      "${courseName.toUpperCase()} • $category", 
+                                      style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 11)
+                                    ),
+                                    trailing: IconButton(
+                                      icon: Icon(
+                                        task['isDone'] ? Icons.check_circle : Icons.radio_button_off, 
+                                        color: task['isDone'] ? Colors.greenAccent : neonLightPurple
+                                      ),
+                                      onPressed: task['isDone'] ? null : () {
+                                        setState(() {
+                                          task['isDone'] = true;
+                                        });
+                                        _saveTasks();
+                                        Provider.of<PetProvider>(context, listen: false).awardGrowthPoints(
+                                          studentID: widget.studentID, exp: task['exp'], coins: task['coins']
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ],
+                  ],
+                ),
+              ),
             ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF7B2CBF),
+        label: Text("ADD QUEST", style: GoogleFonts.orbitron(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
+        icon: const Icon(Icons.add, color: Colors.white),
+        onPressed: _showAddTaskDialog,
+      ),
     );
   }
 }
