@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/main.dart'; // import themeNotifier
 import 'package:my_nthu_life/screens/profile.dart';
 import 'package:my_nthu_life/screens/task_list_page.dart';
 import 'package:my_nthu_life/widgets/pet_dashboard_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'task_list_page.dart';
 import 'transcript.dart';
 import 'study.dart';
@@ -290,6 +293,154 @@ class _HomeState extends State<Home> {
   }
 }
 
+// ====== TODAY'S MISSIONS CARD ======
+class _TodayMissionsCard extends StatefulWidget {
+  final String studentID;
+  const _TodayMissionsCard({required this.studentID});
+
+  @override
+  State<_TodayMissionsCard> createState() => _TodayMissionsCardState();
+}
+
+class _TodayMissionsCardState extends State<_TodayMissionsCard> {
+  List<Map<String, dynamic>> _todayTasks = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTodayTasks();
+  }
+
+  Future<void> _loadTodayTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final todayKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    String? encoded = prefs.getString("CourseTasks_${widget.studentID}");
+    if (encoded == null) return;
+
+    final Map<String, dynamic> raw = jsonDecode(encoded);
+    List<Map<String, dynamic>> result = [];
+
+    raw.forEach((course, tasks) {
+      for (var task in List<dynamic>.from(tasks)) {
+        if (task['assignedDayString'] == todayKey) {
+          result.add({'course': course, 'task': task});
+        }
+      }
+    });
+
+    setState(() => _todayTasks = result);
+  }
+
+  Color _getCategoryColor(String cat) {
+    switch (cat) {
+      case 'Homework':
+        return const Color(0xFF9D4EDD);
+      case 'Quiz':
+        return const Color(0xFFC77DFF);
+      case 'Midterm':
+        return const Color(0xFFE0AAFF);
+      case 'Final':
+        return const Color(0xFF5A189A);
+      case 'Project':
+        return const Color(0xFF00CEC9);
+      default:
+        return const Color(0xFF7B2CBF);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Today's Missions",
+          style: Theme.of(
+            context,
+          ).textTheme.displayLarge?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        if (_todayTasks.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              "No missions today. Enjoy your break! 🎉",
+              style: GoogleFonts.outfit(
+                color: cs.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
+          )
+        else
+          ...(_todayTasks.map((item) {
+            final task = item['task'] as Map<String, dynamic>;
+            final course = item['course'] as String;
+            final isDone = task['isDone'] == true;
+            final catColor = _getCategoryColor(task['category'] ?? 'Other');
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(14),
+                border: Border(left: BorderSide(color: catColor, width: 4)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          task['title'],
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                            decoration: isDone
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        Text(
+                          "${course.toUpperCase()} • ${task['category']}",
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    isDone
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: isDone
+                        ? Colors.greenAccent
+                        : const Color(0xFF7C3AED),
+                    size: 22,
+                  ),
+                ],
+              ),
+            );
+          })),
+      ],
+    );
+  }
+}
+
 // ====== SIDE DRAWER ======
 class _SideDrawer extends StatelessWidget {
   final Animation<double> animation;
@@ -552,15 +703,14 @@ class _HomePage extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 28),
+          // const SizedBox(height: 28),
 
-          Text(
-            "Today",
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-
+          // Text(
+          //   "Today",
+          //   style: Theme.of(context).textTheme.displayLarge?.copyWith(
+          //     color: Theme.of(context).colorScheme.onSurfaceVariant,
+          //   ),
+          // ),
           const SizedBox(height: 12),
 
           ValueListenableBuilder<int>(
@@ -569,6 +719,8 @@ class _HomePage extends StatelessWidget {
               return PetDashboardWidget(currentCredits: credits);
             },
           ),
+          const SizedBox(height: 10),
+          _TodayMissionsCard(studentID: studentID),
         ],
       ),
     );
