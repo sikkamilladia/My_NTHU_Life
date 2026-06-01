@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:my_nthu_life/data/studentData.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_widgets.dart';
 import 'home.dart';
 
@@ -18,32 +19,55 @@ class _LoginState extends State<Login> {
   String password = '';
   bool _passwordVisible = false;
   String? _error;
+  bool _isLoading = false;
 
-  void _handleLogin() {
+  void _handleLogin() async {
     setState(() => _error = null);
 
     if (id.isEmpty || password.isEmpty) {
       setState(() => _error = 'Please fill in all fields.');
       return;
     }
-    if (!studentDatabase.containsKey(id)) {
-      setState(() => _error = 'Student ID not found.');
-      return;
-    }
-    if (studentDatabase[id] != password) {
-      setState(() => _error = 'Incorrect password.');
-      return;
-    }
 
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, _) => Home(studentID: id),
-        transitionsBuilder: (context, animation, _, child) =>
-            FadeTransition(opacity: animation, child: child),
-        transitionDuration: const Duration(milliseconds: 400),
-      ),
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      // Find the user's email by student ID
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('studentID', isEqualTo: id)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        setState(() => _error = 'Student ID not found.');
+        return;
+      }
+
+      final email = userQuery.docs.first['email'];
+
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => Home(studentID: id),
+          transitionsBuilder: (context, animation, _, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = 'An error occurred: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -89,11 +113,13 @@ class _LoginState extends State<Login> {
           authErrorBanner(_error!),
         ],
         const SizedBox(height: 28),
-        authPrimaryButton(
-          label: "Log In",
-          accent: const Color(0xFF7C3AED),
-          onTap: _handleLogin,
-        ),
+        _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : authPrimaryButton(
+              label: "Log In",
+              accent: const Color(0xFF7C3AED),
+              onTap: _handleLogin,
+            ),
         if (widget.narrow) ...[
           const SizedBox(height: 24),
           Center(

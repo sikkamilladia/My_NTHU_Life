@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:my_nthu_life/data/studentData.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_widgets.dart';
 
 class SignUp extends StatefulWidget {
@@ -14,16 +15,18 @@ class SignUp extends StatefulWidget {
 
 class _SignUpState extends State<SignUp> {
   String id = '';
+  String email = '';
   String password = '';
   String confirm = '';
   bool _passwordVisible = false;
   bool _confirmVisible = false;
   String? _error;
+  bool _isLoading = false;
 
   void _handleSignup() async {
     setState(() => _error = null);
 
-    if (id.isEmpty || password.isEmpty || confirm.isEmpty) {
+    if (id.isEmpty || email.isEmpty || password.isEmpty || confirm.isEmpty) {
       setState(() => _error = 'Please fill in all fields.');
       return;
     }
@@ -31,26 +34,43 @@ class _SignUpState extends State<SignUp> {
       setState(() => _error = 'Passwords do not match.');
       return;
     }
-    if (studentDatabase.containsKey(id)) {
-      setState(() => _error = 'Student ID already registered.');
-      return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Store user metadata in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+        'studentID': id,
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+
+        'courses' : {}
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Account created! Please log in.'),
+          backgroundColor: const Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+
+      widget.onSwitchToLogin();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = 'An error occurred: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    studentDatabase[id] = password;
-    await saveUsers();
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Account created! Please log in.'),
-        backgroundColor: const Color(0xFF4CAF50),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-
-    widget.onSwitchToLogin();
   }
 
   @override
@@ -82,6 +102,14 @@ class _SignUpState extends State<SignUp> {
                     label: "Student ID",
                     icon: Icons.badge_outlined,
                     onChanged: (v) => id = v,
+                  ),
+                  const SizedBox(height: 14),
+                  
+                  authInputField(
+                    label: "Email",
+                    icon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    onChanged: (v) => email = v,
                   ),
                   const SizedBox(height: 14),
 
@@ -130,11 +158,13 @@ class _SignUpState extends State<SignUp> {
 
                   const SizedBox(height: 24),
 
-                  authPrimaryButton(
-                    label: "Sign Up",
-                    accent: const Color(0xFF3A52ED),
-                    onTap: _handleSignup,
-                  ),
+                  _isLoading 
+                    ? const Center(child: CircularProgressIndicator())
+                    : authPrimaryButton(
+                        label: "Sign Up",
+                        accent: const Color(0xFF3A52ED),
+                        onTap: _handleSignup,
+                      ),
 
                   if (widget.narrow) ...[
                     const SizedBox(height: 24),

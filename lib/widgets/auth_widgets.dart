@@ -6,11 +6,13 @@ Widget authInputField({
   bool obscure = false,
   Widget? suffixIcon,
   required ValueChanged<String> onChanged,
+  TextInputType? keyboardType,
 }) {
   return Builder(
     builder: (context) {
       final tt = Theme.of(context).textTheme;
       return TextField(
+        keyboardType: keyboardType,
         obscureText: obscure,
         onChanged: onChanged,
         style: tt.bodyMedium,
