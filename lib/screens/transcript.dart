@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_nthu_life/screens/gpa_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/data/semester.dart';
 import 'package:my_nthu_life/main.dart';
@@ -401,14 +402,13 @@ class _CreditPageState extends State<CreditPage> {
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => GPAPredictor(
-                studentID: widget.studentID,
-              ), // 👈 Pointed cleanly to GPAPredictor in study.dart
+              builder: (_) =>
+                  GpaCalculatorPage(), // 👈 Pointed cleanly to GPAPredictor in study.dart
             ),
           ),
           backgroundColor: purpleMain,
           foregroundColor: Colors.white,
-          tooltip: "GPA Predictor Matrix",
+          tooltip: "GPA Calculator",
           child: const Icon(Icons.calculate_rounded),
         ),
       ),
