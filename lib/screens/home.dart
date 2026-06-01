@@ -105,7 +105,7 @@ class _HomeState extends State<Home> {
               title: Text(
                 "My NTHU Life",
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               actions: [
@@ -364,7 +364,7 @@ class _TodayMissionsCardState extends State<_TodayMissionsCard> {
           "Today's Missions",
           style: Theme.of(
             context,
-          ).textTheme.displayLarge?.copyWith(color: cs.onSurfaceVariant),
+          ).textTheme.displayLarge?.copyWith(color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         if (_todayTasks.isEmpty)
