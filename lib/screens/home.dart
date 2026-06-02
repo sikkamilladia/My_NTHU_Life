@@ -46,7 +46,7 @@ class _HomeState extends State<Home> {
     _pages = [
       _HomePage(studentID: widget.studentID),
       CreditPage(studentID: widget.studentID),
-      GPAPredictor(studentID: widget.studentID),
+      AIStudyMaterialWidget(),
       TaskListPage(studentID: widget.studentID),
       PartyPage(studentID: widget.studentID),
       // Center(
@@ -184,7 +184,8 @@ class _HomeState extends State<Home> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ProfileScreen(),
+                      builder: (context) =>
+                          ProfileScreen(studentID: widget.studentID),
                     ),
                   );
                 },
