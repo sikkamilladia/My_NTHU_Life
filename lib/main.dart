@@ -3,8 +3,7 @@ import 'package:my_nthu_life/data/studentData.dart';
 import 'package:my_nthu_life/screens/auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/theme/theme.dart';
-
-// 1. Core Firebase packages imported here
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; 
 
@@ -20,6 +19,7 @@ final totalCreditsNotifier = ValueNotifier<int>(0);
 void main() async {
   // Ensure native bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   
   try {
     print("📡 [Firebase Test] Attempting connection initialization...");
