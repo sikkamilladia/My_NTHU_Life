@@ -108,6 +108,20 @@ class _LoginState extends State<Login> {
           ),
           onChanged: (v) => password = v,
         ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => _showResetPasswordDialog(context),
+            child: const Text(
+              "Forgot Password?",
+              style: TextStyle(
+                color: Color(0xFF7C3AED),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
         if (_error != null) ...[
           const SizedBox(height: 12),
           authErrorBanner(_error!),
@@ -149,4 +163,54 @@ class _LoginState extends State<Login> {
       ],
     );
   }
+  void _showResetPasswordDialog(BuildContext context) {
+  final controller = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Reset Password"),
+      content: TextField(
+        controller: controller,
+        decoration: const InputDecoration(
+          labelText: "Enter your email",
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            try {
+              await FirebaseAuth.instance.sendPasswordResetEmail(
+                email: controller.text.trim(),
+              );
+
+              Navigator.pop(context);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Reset link sent to email"),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            } on FirebaseAuthException catch (e) {
+              Navigator.pop(context);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(e.message ?? "Error occurred"),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          child: const Text("Send"),
+        ),
+      ],
+    ),
+  );
+}
 }
