@@ -34,6 +34,7 @@ Format:
     {
       "title": "...",
       "url": "https://www.youtube.com/watch?v=xxxxx",
+      "thumbnail": "https://img.youtube.com/vi/xxxxx/hqdefault.jpg"
       "channel": "...",
       "explanation": "...",
       "xp": 10,

@@ -19,6 +19,15 @@ class _AIStudyMaterialWidgetState
   String? summaryResult;
   bool isSummarizing = false;
   bool hasSearched = false;
+  String? getThumbnailUrl(String? url) {
+  if (url == null || url.isEmpty) return null;
+
+  final videoId = YoutubePlayer.convertUrlToId(url);
+
+  if (videoId == null) return null;
+
+  return "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg";
+}
   @override
   Widget build(BuildContext context) {
     // --- DARK MODE COLOR THEME CONFIGURATION ---
@@ -351,26 +360,24 @@ class _AIStudyMaterialWidgetState
     onTap: onTap,
     child: Container(
       margin: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Row(
-          children: [
-            Icon(icon, size: 14, color: primaryPurple),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                color: primaryPurple,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2636),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderPurple),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: primaryPurple),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              color: primaryPurple,
+              fontSize: 12,
             ),
-          ],
-        ),
-        selected: false,
-        onSelected: (_) {},
-        backgroundColor: const Color(0xFF2D2636),
-        side: BorderSide(color: borderPurple),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ],
       ),
     ),
   );
@@ -485,17 +492,39 @@ Widget _buildVideoItem(Map<String, dynamic> video) {
       );
     },
 
-    leading: Container(
-      width: 120,
-      height: 70,
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2636),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Icon(
-        Icons.play_circle_fill,
-        color: Colors.red,
-        size: 32,
+    leading: ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Image.network(
+            getThumbnailUrl(video["url"]) ??
+                "https://via.placeholder.com/120x70",
+            width: 120,
+            height: 70,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) {
+              return Container(
+                width: 120,
+                height: 70,
+                color: const Color(0xFF2D2636),
+              );
+            },
+          ),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              shape: BoxShape.circle,
+            ),
+            padding: const EdgeInsets.all(6),
+            child: const Icon(
+              Icons.play_arrow,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+        ],
       ),
     ),
 
@@ -567,9 +596,9 @@ Widget _buildVideoItem(Map<String, dynamic> video) {
     setState(() {
       isSummarizing = true;
     });
-
+    print("TEXT = $text");
     final result = await AIService.summarizeNotes(text);
-
+    print("result = $result");
     final summary = result["summary"];
 
     if (summary == null || summary.isEmpty) {
@@ -583,7 +612,7 @@ Widget _buildVideoItem(Map<String, dynamic> video) {
       summaryResult = summary;
       isSummarizing = false;
     });
-
+    if (!mounted) return;
     _showSummaryBottomSheet();
 
   } catch (e) {
@@ -630,13 +659,13 @@ class YoutubePlayerScreen extends StatefulWidget {
 
 class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
   YoutubePlayerController? _controller;
-
   @override
   void initState() {
     super.initState();
 
     final videoId = YoutubePlayer.convertUrlToId(widget.url);
-
+    print(widget.url);
+    print(videoId);
     if (videoId == null) {
       debugPrint("Invalid YouTube URL: ${widget.url}");
       return;
