@@ -69,4 +69,52 @@ Format:
     "summary": response.text ?? "No summary"
   };
 }
+static Future<Map<String, dynamic>> generateQuiz(String topic) async {
+  final prompt = """
+Generate 5 multiple choice questions about:
+
+$topic
+
+You MUST return ONLY valid JSON.
+
+Format exactly:
+{
+  "quiz": [
+    {
+      "question": "...",
+      "options": ["A", "B", "C", "D"],
+      "answer": "A",
+      "explanation": "..."
+    }
+  ]
+}
+
+Rules:
+- Focus on conceptual understanding
+- 4 options each
+- Only one correct answer
+- Explanation must be short and clear
+""";
+
+  final response = await _model.generateContent([
+    Content.text(prompt),
+  ]);
+
+  print("RAW QUIZ:");
+  print(response.text);
+
+  String text = response.text ?? "{}";
+
+  final start = text.indexOf('{');
+  final end = text.lastIndexOf('}');
+
+  if (start != -1 && end != -1) {
+    text = text.substring(start, end + 1);
+  }
+
+  print("CLEAN QUIZ JSON:");
+  print(text);
+
+  return jsonDecode(text);
+}
 }

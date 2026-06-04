@@ -19,6 +19,8 @@ class _AIStudyMaterialWidgetState
   String? summaryResult;
   bool isSummarizing = false;
   bool hasSearched = false;
+  bool isGeneratingQuiz = false;
+  Map<String, dynamic>? quizResult;
   String? getThumbnailUrl(String? url) {
   if (url == null || url.isEmpty) return null;
 
@@ -188,6 +190,7 @@ class _AIStudyMaterialWidgetState
                           _buildActionButton(Icons.menu_book_outlined, "Explain a topic", primaryPurple, borderPurple),
                           _buildActionButton(Icons.description_outlined, "Summarize notes", primaryPurple, borderPurple, onTap: _summarizeNotes,),
                           _buildActionButton(Icons.play_circle_outline_rounded, "Recommend videos", primaryPurple, borderPurple),
+                          _buildActionButton(Icons.quiz_outlined, "Generate Quiz", primaryPurple, borderPurple, onTap: _generateQuiz,),
                           _buildActionButton(Icons.more_horiz, "More", primaryPurple, borderPurple),
                         ],
                       ),
@@ -662,6 +665,7 @@ Widget _buildVideoItem(Map<String, dynamic> video) {
     });
   }
 }
+  
   void _showSummaryBottomSheet() {
   showModalBottomSheet(
     context: context,
@@ -680,6 +684,108 @@ Widget _buildVideoItem(Map<String, dynamic> video) {
               fontSize: 14,
             ),
           ),
+        ),
+      );
+    },
+  );
+}
+  Future<void> _generateQuiz() async {
+  try {
+    final topic = _controller.text.trim();
+    if (topic.isEmpty) return;
+    if (isGeneratingQuiz) return;
+
+    setState(() {
+      isGeneratingQuiz = true;
+    });
+
+    final result = await AIService.generateQuiz(topic);
+
+    setState(() {
+      quizResult = result;
+      isGeneratingQuiz = false;
+    });
+
+    if (!mounted) return;
+
+    _showQuizBottomSheet();
+
+  } catch (e) {
+    print("QUIZ ERROR: $e");
+
+    setState(() {
+      isGeneratingQuiz = false;
+    });
+  }
+}
+  void _showQuizBottomSheet() {
+  final quiz = quizResult?["quiz"] ?? [];
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF1F1B24),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (_) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: quiz.length,
+          itemBuilder: (context, index) {
+            final q = quiz[index];
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2636),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Q${index + 1}. ${q["question"]}",
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  ...List.generate((q["options"] as List).length, (i) {
+                    return Text(
+                      "${String.fromCharCode(65 + i)}. ${q["options"][i]}",
+                      style: GoogleFonts.outfit(color: Colors.grey),
+                    );
+                  }),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    "Answer: ${q["answer"]}",
+                    style: GoogleFonts.outfit(
+                      color: Colors.greenAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    q["explanation"] ?? "",
+                    style: GoogleFonts.outfit(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       );
     },
