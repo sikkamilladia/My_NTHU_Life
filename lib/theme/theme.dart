@@ -300,11 +300,11 @@ class MaterialTheme {
   //     onError: Color(0xff000000),
   //     errorContainer: Color(0xffffaea4),
   //     onErrorContainer: Color(0xff220001),
-  //     surface: Color(0xff161217),
-  //     onSurface: Color(0xffffffff),
-  //     onSurfaceVariant: Color(0xffffffff),
-  //     outline: Color(0xfff8edf7),
-  //     outlineVariant: Color(0xffcabfca),
+  //     surface: Color(0xff0B090A),
+  //     onSurface: Color(0xffE9E0E7),
+  //     onSurfaceVariant: Color(0xff9E9299),
+  //     outline: Color(0xff7B2CBF),
+  //     outlineVariant: Color(0xff240046),
   //     shadow: Color(0xff000000),
   //     scrim: Color(0xff000000),
   //     inverseSurface: Color(0xffe9e0e7),
@@ -321,69 +321,82 @@ class MaterialTheme {
   //     onTertiaryFixed: Color(0xff000000),
   //     tertiaryFixedDim: Color(0xfff4b7b8),
   //     onTertiaryFixedVariant: Color(0xff250709),
-  //     surfaceDim: Color(0xff161217),
-  //     surfaceBright: Color(0xff544e54),
-  //     surfaceContainerLowest: Color(0xff000000),
-  //     surfaceContainerLow: Color(0xff221e24),
-  //     surfaceContainer: Color(0xff342f35),
-  //     surfaceContainerHigh: Color(0xff3f3a40),
-  //     surfaceContainerHighest: Color(0xff4a454b),
+  //     surfaceDim: Color(0xff0B090A),
+  //     surfaceBright: Color(0xff3C096C),
+  //     surfaceContainerLowest: Color(0xff110d12),
+  //     surfaceContainerLow: Color(0xff16121E),
+  //     surfaceContainer: Color(0xff1E1A24),
+  //     surfaceContainerHigh: Color(0xff241E2E),
+  //     surfaceContainerHighest: Color(0xff2D2838),
   //   );
   // }
-
   static ColorScheme darkHighContrastScheme() {
     return const ColorScheme(
       brightness: Brightness.dark,
-      primary: Color(0xfffceaff),
-      surfaceTint: Color(0xffe1b7f5),
-      onPrimary: Color(0xff000000),
-      primaryContainer: Color(0xffddb4f1),
-      onPrimaryContainer: Color(0xff180027),
-      secondary: Color(0xfffceaff),
-      onSecondary: Color(0xff000000),
-      secondaryContainer: Color(0xffcfbdd4),
-      onSecondaryContainer: Color(0xff110717),
-      tertiary: Color(0xffffeceb),
-      onTertiary: Color(0xff000000),
-      tertiaryContainer: Color(0xfff0b3b4),
-      onTertiaryContainer: Color(0xff1e0305),
-      error: Color(0xffffece9),
-      onError: Color(0xff000000),
-      errorContainer: Color(0xffffaea4),
-      onErrorContainer: Color(0xff220001),
-      // ── Surface stack: mirrors task_list_page dark-purple aesthetic ──
-      surface: Color(0xff0B090A), // bgBlack — scaffold background
-      onSurface: Color(
-        0xffE9E0E7,
-      ), // near-white body text (was 0xffffffff; toned to match grey.shade300–400 text in task cards)
-      onSurfaceVariant: Color(
-        0xff9E9299,
-      ), // grey.shade500 equivalent for subtitles/icons
-      outline: Color(0xff7B2CBF), // active/focus border (purple accent)
-      outlineVariant: Color(0xff240046), // subtle card border colour
-      shadow: Color(0xff000000),
-      scrim: Color(0xff000000),
-      inverseSurface: Color(0xffe9e0e7),
-      inversePrimary: Color(0xff5c3a6e),
+
+      // ── Primary (Purple Accent) ──
+      primary: Color(0xfffceaff), // High-contrast primary text/icon
+      onPrimary: Color(0xff000000), // Text on primary
+      primaryContainer: Color(0xffC77DFF), // Neon light purple (chip, badge bg)
+      onPrimaryContainer: Color(0xff180027), // Text on primaryContainer
       primaryFixed: Color(0xfff5d9ff),
       onPrimaryFixed: Color(0xff000000),
       primaryFixedDim: Color(0xffe1b7f5),
       onPrimaryFixedVariant: Color(0xff200034),
+      surfaceTint: Color(0xffe1b7f5),
+
+      // ── Secondary ──
+      secondary: Color(0xfffceaff),
+      onSecondary: Color(0xff000000),
+      secondaryContainer: Color(0xffcfbdd4),
+      onSecondaryContainer: Color(0xff110717),
       secondaryFixed: Color(0xfff0dcf5),
       onSecondaryFixed: Color(0xff000000),
       secondaryFixedDim: Color(0xffd3c0d8),
       onSecondaryFixedVariant: Color(0xff180d1d),
+
+      // ── Tertiary ──
+      tertiary: Color(0xffffeceb),
+      onTertiary: Color(0xff000000),
+      tertiaryContainer: Color(0xfff0b3b4),
+      onTertiaryContainer: Color(0xff1e0305),
       tertiaryFixed: Color(0xffffdad9),
       onTertiaryFixed: Color(0xff000000),
       tertiaryFixedDim: Color(0xfff4b7b8),
       onTertiaryFixedVariant: Color(0xff250709),
-      surfaceDim: Color(0xff0B090A), // same as surface (true abyss)
-      surfaceBright: Color(0xff3C096C), // selected-day highlight purple
-      surfaceContainerLowest: Color(0xff110d12), // deepest layer
-      surfaceContainerLow: Color(0xff16121E), // cardDarkPurple — dialog bg
-      surfaceContainer: Color(0xff1E1A24), // mid container
-      surfaceContainerHigh: Color(0xff241E2E), // input fill / dropdown bg
-      surfaceContainerHighest: Color(0xff2D2838), // cancel button / top layer
+
+      // ── Error ──
+      error: Color(0xffffece9),
+      onError: Color(0xff000000),
+      errorContainer: Color(0xffffaea4),
+      onErrorContainer: Color(0xff220001),
+
+      // ── Surface Stack (matches task_list_page aesthetic) ──
+      surface: Color(0xff0B090A), // bgBlack — scaffold background
+      onSurface: Color(0xffE9E0E7), // Body text (cards, titles)
+      onSurfaceVariant: Color(0xff9E9299), // Subtitle / icon (grey.shade500)
+      surfaceDim: Color(0xff0B090A), // Same as surface (true abyss)
+      surfaceBright: Color(0xff3C096C), // Selected-day highlight purple
+      surfaceContainerLowest: Color(0xff110d12), // Deepest layer
+      surfaceContainerLow: Color(
+        0xff16121E,
+      ), // cardDarkPurple — card & dialog bg
+      surfaceContainer: Color(0xff1E1A24), // Mid-level container
+      surfaceContainerHigh: Color(0xff241E2E), // Input fill / dropdown bg
+      surfaceContainerHighest: Color(0xff2D2838), // Cancel button / top layer
+      // ── Borders & Outlines ──
+      outline: Color.fromARGB(
+        255,
+        152,
+        55,
+        236,
+      ), // Active/focus border, FAB color
+      outlineVariant: Color(0xff240046), // Subtle card border
+      // ── Misc ──
+      shadow: Color(0xff000000),
+      scrim: Color(0xff000000),
+      inverseSurface: Color(0xffe9e0e7),
+      inversePrimary: Color(0xff9D4EDD), // Section label purple
     );
   }
 

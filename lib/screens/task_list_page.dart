@@ -62,7 +62,6 @@ class _TaskListPageState extends State<TaskListPage> {
     _fetchCourseList();
   }
 
-  // Real-time courses extraction to populate the task drop-down menu automatically
   Future<void> _fetchCourseList() async {
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -85,7 +84,6 @@ class _TaskListPageState extends State<TaskListPage> {
     }
   }
 
-  // Dynamic EXP allocation engine mapping rule definitions
   int _calculateExpForCategory(String category) {
     switch (category) {
       case 'Homework':
@@ -97,7 +95,7 @@ class _TaskListPageState extends State<TaskListPage> {
       case 'Final':
         return 20;
       default:
-        return 10; // Default flat fallback for Projects/Others
+        return 10;
     }
   }
 
@@ -124,6 +122,7 @@ class _TaskListPageState extends State<TaskListPage> {
   }
 
   Color _getCategoryColor(String category) {
+    // Category colors are semantic/fixed — kept as explicit constants
     switch (category) {
       case 'Homework':
         return const Color(0xFF9D4EDD);
@@ -142,7 +141,7 @@ class _TaskListPageState extends State<TaskListPage> {
     }
   }
 
-  void _showAddTaskDialog() {
+  void _showAddTaskDialog(ColorScheme cs) {
     if (_selectedDay == null) return;
     String taskTitle = "";
     String selectedCategory = _categories.first;
@@ -159,16 +158,19 @@ class _TaskListPageState extends State<TaskListPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF16121E),
+              // surfaceContainerLow = cardDarkPurple (#16121E)
+              backgroundColor: cs.surfaceContainerLow,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
-                side: const BorderSide(color: Color(0xFF3C096C), width: 1.5),
+                // surfaceBright = selected-day purple (#3C096C)
+                side: BorderSide(color: cs.surfaceBright, width: 1.5),
               ),
               title: Text(
                 "Assign Matrix Quest",
                 style: GoogleFonts.orbitron(
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFFE0AAFF),
+                  // primaryContainer = neon light purple (#C77DFF) — dialog title
+                  color: cs.primaryContainer,
                   fontSize: 16,
                 ),
               ),
@@ -178,16 +180,14 @@ class _TaskListPageState extends State<TaskListPage> {
                   children: [
                     _courseNames.isNotEmpty
                         ? DropdownButtonFormField<String>(
-                            dropdownColor: const Color(0xFF16121E),
+                            dropdownColor: cs.surfaceContainerLow,
                             value: selectedCourse,
-                            style: GoogleFonts.outfit(color: Colors.white),
-                            decoration: const InputDecoration(
+                            style: GoogleFonts.outfit(color: cs.onSurface),
+                            decoration: InputDecoration(
                               labelText: "Target Course",
-                              labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                              labelStyle: TextStyle(color: cs.primaryContainer),
                               enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0xFF3C096C),
-                                ),
+                                borderSide: BorderSide(color: cs.surfaceBright),
                               ),
                             ),
                             items: _courseNames
@@ -212,43 +212,45 @@ class _TaskListPageState extends State<TaskListPage> {
                           )
                         : TextField(
                             controller: customCourseController,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
+                            style: TextStyle(color: cs.onSurface),
+                            decoration: InputDecoration(
                               labelText: "Target Course Name",
-                              labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                              labelStyle: TextStyle(color: cs.primaryContainer),
                               hintText: "e.g. Operating Systems",
-                              hintStyle: TextStyle(color: Colors.white24),
+                              hintStyle: TextStyle(
+                                color: cs.onSurface.withOpacity(0.24),
+                              ),
                               enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Color(0xFF3C096C),
-                                ),
+                                borderSide: BorderSide(color: cs.surfaceBright),
                               ),
                             ),
                           ),
                     const SizedBox(height: 12),
                     TextField(
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: cs.onSurface),
+                      decoration: InputDecoration(
                         labelText: "Quest Title",
-                        labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                        labelStyle: TextStyle(color: cs.primaryContainer),
                         hintText: "e.g. Complete Lab Report analysis",
-                        hintStyle: TextStyle(color: Colors.white24),
+                        hintStyle: TextStyle(
+                          color: cs.onSurface.withOpacity(0.24),
+                        ),
                         enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF3C096C)),
+                          borderSide: BorderSide(color: cs.surfaceBright),
                         ),
                       ),
                       onChanged: (value) => taskTitle = value,
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      dropdownColor: const Color(0xFF16121E),
+                      dropdownColor: cs.surfaceContainerLow,
                       value: selectedCategory,
-                      style: GoogleFonts.outfit(color: Colors.white),
-                      decoration: const InputDecoration(
+                      style: GoogleFonts.outfit(color: cs.onSurface),
+                      decoration: InputDecoration(
                         labelText: "Category",
-                        labelStyle: TextStyle(color: Color(0xFFC77DFF)),
+                        labelStyle: TextStyle(color: cs.primaryContainer),
                         enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF3C096C)),
+                          borderSide: BorderSide(color: cs.surfaceBright),
                         ),
                       ),
                       items: _categories
@@ -268,9 +270,9 @@ class _TaskListPageState extends State<TaskListPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
+                  child: Text(
                     "Cancel",
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                 ),
                 TextButton(
@@ -287,7 +289,6 @@ class _TaskListPageState extends State<TaskListPage> {
                         selectedCategory,
                       );
 
-                      // Write task payload into a centralized user subcollection
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(widget.studentID)
@@ -309,7 +310,7 @@ class _TaskListPageState extends State<TaskListPage> {
                   child: Text(
                     "Confirm",
                     style: GoogleFonts.orbitron(
-                      color: const Color(0xFFC77DFF),
+                      color: cs.primaryContainer,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -324,14 +325,15 @@ class _TaskListPageState extends State<TaskListPage> {
 
   @override
   Widget build(BuildContext context) {
-    const Color bgBlack = Color(0xFF0B090A);
-    const Color cardDarkPurple = Color(0xFF16121E);
-    const Color neonLightPurple = Color(0xFFC77DFF);
+    final cs = Theme.of(context).colorScheme;
 
     if (_isLoadingCourses) {
-      return const Scaffold(
-        backgroundColor: bgBlack,
-        body: Center(child: CircularProgressIndicator(color: neonLightPurple)),
+      return Scaffold(
+        // surface = bgBlack (#0B090A)
+        backgroundColor: cs.surface,
+        body: Center(
+          child: CircularProgressIndicator(color: cs.primaryContainer),
+        ),
       );
     }
 
@@ -354,7 +356,6 @@ class _TaskListPageState extends State<TaskListPage> {
           .collection('tasks')
           .snapshots(),
       builder: (context, snapshot) {
-        // Build active tasks dictionary lookup for calendar indicators
         final Map<String, List<DocumentSnapshot>> tasksByDay = {};
         if (snapshot.hasData) {
           for (var doc in snapshot.data!.docs) {
@@ -370,16 +371,16 @@ class _TaskListPageState extends State<TaskListPage> {
         final activeDayDocs = tasksByDay[selectedTargetKey] ?? [];
 
         return Scaffold(
-          backgroundColor: bgBlack,
+          backgroundColor: cs.surface,
           appBar: AppBar(
-            backgroundColor: bgBlack,
+            backgroundColor: cs.surface,
             elevation: 0,
             title: Text(
               "TIMELINE ARCHIVE",
               style: GoogleFonts.orbitron(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: cs.onSurface,
                 letterSpacing: 1.5,
               ),
             ),
@@ -399,10 +400,11 @@ class _TaskListPageState extends State<TaskListPage> {
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: cardDarkPurple,
+                            color: cs.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(24),
+                            // outlineVariant = subtle card border (#240046)
                             border: Border.all(
-                              color: const Color(0xFF240046),
+                              color: cs.outlineVariant,
                               width: 1.5,
                             ),
                           ),
@@ -413,7 +415,8 @@ class _TaskListPageState extends State<TaskListPage> {
                                 "Select structural nodes to allocate tasks",
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
-                                  color: const Color(0xFF7B2CBF),
+                                  // outline = active purple (#7B2CBF)
+                                  color: cs.outline,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
@@ -429,7 +432,7 @@ class _TaskListPageState extends State<TaskListPage> {
                                         style: GoogleFonts.orbitron(
                                           fontSize: 24,
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                                          color: cs.onSurface,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
@@ -437,7 +440,8 @@ class _TaskListPageState extends State<TaskListPage> {
                                         "${_focusedMonth.year}",
                                         style: GoogleFonts.orbitron(
                                           fontSize: 14,
-                                          color: const Color(0xFF9D4EDD),
+                                          // inversePrimary = section label purple (#9D4EDD)
+                                          color: cs.inversePrimary,
                                         ),
                                       ),
                                     ],
@@ -445,16 +449,16 @@ class _TaskListPageState extends State<TaskListPage> {
                                   Row(
                                     children: [
                                       IconButton(
-                                        icon: const Icon(
+                                        icon: Icon(
                                           Icons.chevron_left,
-                                          color: neonLightPurple,
+                                          color: cs.primaryContainer,
                                         ),
                                         onPressed: _previousMonth,
                                       ),
                                       IconButton(
-                                        icon: const Icon(
+                                        icon: Icon(
                                           Icons.chevron_right,
-                                          color: neonLightPurple,
+                                          color: cs.primaryContainer,
                                         ),
                                         onPressed: _nextMonth,
                                       ),
@@ -475,7 +479,9 @@ class _TaskListPageState extends State<TaskListPage> {
                                             style: GoogleFonts.orbitron(
                                               fontSize: 9,
                                               fontWeight: FontWeight.bold,
-                                              color: const Color(0xFF5A189A),
+                                              // surfaceBright doubles as deep purple accent (#3C096C → too dark)
+                                              // use outline for week labels for legibility
+                                              color: cs.outline,
                                             ),
                                           ),
                                         ),
@@ -525,20 +531,22 @@ class _TaskListPageState extends State<TaskListPage> {
                                           ),
                                           decoration: BoxDecoration(
                                             color: isSelected
-                                                ? const Color(0xFF3C096C)
+                                                ? cs
+                                                      .surfaceBright // #3C096C selected
                                                 : (isToday
-                                                      ? const Color(0xFF240046)
+                                                      ? cs
+                                                            .outlineVariant // #240046 today
                                                       : Colors.transparent),
                                             borderRadius: BorderRadius.circular(
                                               10,
                                             ),
                                             border: Border.all(
                                               color: isSelected
-                                                  ? neonLightPurple
+                                                  ? cs
+                                                        .primaryContainer // #C77DFF selected border
                                                   : (isToday
-                                                        ? const Color(
-                                                            0xFF7B2CBF,
-                                                          )
+                                                        ? cs
+                                                              .outline // #7B2CBF today border
                                                         : Colors.white10),
                                               width: 1.2,
                                             ),
@@ -556,18 +564,16 @@ class _TaskListPageState extends State<TaskListPage> {
                                                     ? FontWeight.bold
                                                     : FontWeight.w400,
                                                 color: isSelected
-                                                    ? Colors.white
+                                                    ? cs
+                                                          .onSurface // white
                                                     : (isToday
-                                                          ? neonLightPurple
-                                                          : Colors
-                                                                .grey
-                                                                .shade400),
+                                                          ? cs
+                                                                .primaryContainer // #C77DFF
+                                                          : cs.onSurfaceVariant), // grey
                                               ),
                                             ),
                                           ),
                                         ),
-
-                                        // ===== UPGRADED HIGH-CONTRAST NEON GOLD CROWN BADGE =====
                                         if (hasTask)
                                           Positioned(
                                             top: 4,
@@ -575,9 +581,8 @@ class _TaskListPageState extends State<TaskListPage> {
                                             child: Container(
                                               padding: const EdgeInsets.all(2),
                                               decoration: BoxDecoration(
-                                                color: const Color(
-                                                  0xFF16121E,
-                                                ).withOpacity(0.8),
+                                                color: cs.surfaceContainerLow
+                                                    .withOpacity(0.8),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color: const Color(
@@ -589,13 +594,10 @@ class _TaskListPageState extends State<TaskListPage> {
                                               child: const Text(
                                                 "👑",
                                                 style: TextStyle(
-                                                  fontSize:
-                                                      12, // Bigger visual visibility
+                                                  fontSize: 12,
                                                   shadows: [
                                                     Shadow(
-                                                      color: Color(
-                                                        0xFFFFD700,
-                                                      ), // Gold drop glow outline
+                                                      color: Color(0xFFFFD700),
                                                       blurRadius: 6,
                                                     ),
                                                   ],
@@ -625,7 +627,7 @@ class _TaskListPageState extends State<TaskListPage> {
                                 style: GoogleFonts.orbitron(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF9D4EDD),
+                                  color: cs.inversePrimary,
                                   letterSpacing: 1,
                                 ),
                               ),
@@ -636,14 +638,14 @@ class _TaskListPageState extends State<TaskListPage> {
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(24),
                                   decoration: BoxDecoration(
-                                    color: cardDarkPurple,
+                                    color: cs.surfaceContainerLow,
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Center(
                                     child: Text(
                                       "No tasks assigned to this timeline node.",
                                       style: GoogleFonts.outfit(
-                                        color: Colors.grey.shade600,
+                                        color: cs.onSurfaceVariant,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -669,14 +671,14 @@ class _TaskListPageState extends State<TaskListPage> {
                                     final int coinsGained = task['coins'] ?? 5;
 
                                     return Card(
-                                      color: cardDarkPurple,
+                                      color: cs.surfaceContainerLow,
                                       margin: const EdgeInsets.only(bottom: 10),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
                                         side: BorderSide(
-                                          color: const Color(
-                                            0xFF240046,
-                                          ).withOpacity(0.5),
+                                          color: cs.outlineVariant.withOpacity(
+                                            0.5,
+                                          ),
                                         ),
                                       ),
                                       child: ListTile(
@@ -688,24 +690,23 @@ class _TaskListPageState extends State<TaskListPage> {
                                         title: Text(
                                           task['title'] ?? '',
                                           style: GoogleFonts.outfit(
-                                            color: Colors.white,
+                                            color: cs.onSurface,
                                             fontSize: 15,
                                           ),
                                         ),
                                         subtitle: Text(
                                           "${courseName.toUpperCase()} • $category (+$expGained EXP)",
                                           style: GoogleFonts.outfit(
-                                            color: Colors.grey.shade500,
+                                            color: cs.onSurfaceVariant,
                                             fontSize: 11,
                                           ),
                                         ),
                                         trailing: IconButton(
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.radio_button_off,
-                                            color: neonLightPurple,
+                                            color: cs.primaryContainer,
                                           ),
                                           onPressed: () async {
-                                            // 1. Award reward values to Pet State Management Engine
                                             Provider.of<PetProvider>(
                                               context,
                                               listen: false,
@@ -715,7 +716,6 @@ class _TaskListPageState extends State<TaskListPage> {
                                               coins: coinsGained,
                                             );
 
-                                            // 2. Wipe completed node records completely out of Firestore
                                             await FirebaseFirestore.instance
                                                 .collection('users')
                                                 .doc(widget.studentID)
@@ -737,17 +737,18 @@ class _TaskListPageState extends State<TaskListPage> {
             ),
           ),
           floatingActionButton: FloatingActionButton.extended(
-            backgroundColor: const Color(0xFF7B2CBF),
+            // outline = FAB purple (#7B2CBF)
+            backgroundColor: cs.outline,
             label: Text(
               "ADD QUEST",
               style: GoogleFonts.orbitron(
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: cs.onPrimary,
                 fontSize: 12,
               ),
             ),
-            icon: const Icon(Icons.add, color: Colors.white),
-            onPressed: _showAddTaskDialog,
+            icon: Icon(Icons.add, color: cs.onPrimary),
+            onPressed: () => _showAddTaskDialog(cs),
           ),
         );
       },
