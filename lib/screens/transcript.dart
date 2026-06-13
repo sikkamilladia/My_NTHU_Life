@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/screens/gpa_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/data/semester.dart';
 import 'package:my_nthu_life/main.dart';
-import 'package:my_nthu_life/screens/study.dart';
 import 'package:my_nthu_life/services/firestore_services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
@@ -17,10 +17,10 @@ class CreditPage extends StatefulWidget {
 }
 
 class _CreditPageState extends State<CreditPage> {
-  // ===== ACCENT COLORS =====
-  static const purpleMain = Color(0xFF7C3AED);
-  static const purpleDark = Color(0xFF6D28D9);
-  static const purpleLight = Color(0xFFA78BFA);
+  // Fixed semantic purples kept for gradient & focus border
+  static const purpleMain = Color(0xFF7B2CBF);
+  static const purpleDark = Color(0xFF5A189A);
+  static const purpleLight = Color(0xFFC77DFF);
 
   final int graduationCredits = 128;
   final FirestoreService _firestoreService = FirestoreService();
@@ -36,7 +36,8 @@ class _CreditPageState extends State<CreditPage> {
     loadCourses();
   }
 
-  // ===== STORAGE =====
+  // ── Storage ────────────────────────────────────────────────────────────────
+
   Future<void> saveCourses() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -47,7 +48,6 @@ class _CreditPageState extends State<CreditPage> {
   }
 
   Future<void> loadCourses() async {
-    // 1. Quick local storage fallback
     final prefs = await SharedPreferences.getInstance();
     String? encoded = prefs.getString("Semesters_${widget.studentID}");
     if (encoded != null) {
@@ -58,7 +58,6 @@ class _CreditPageState extends State<CreditPage> {
       totalCreditsNotifier.value = totalCredits;
     }
 
-    // 2. Fetch ground truth from Firebase Cloud Firestore and sort them
     try {
       final docSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -67,11 +66,8 @@ class _CreditPageState extends State<CreditPage> {
 
       if (docSnapshot.exists && docSnapshot.data() != null) {
         final data = docSnapshot.data()!;
-
         if (data['courses'] != null) {
           final Map<String, dynamic> cloudCourses = data['courses'];
-
-          // Clear out existing local course listings to prepare for fresh cloud sorting slots
           List<Semester> freshSemesters = [
             Semester(semesterName: "Semester 1", courses: []),
           ];
@@ -79,21 +75,15 @@ class _CreditPageState extends State<CreditPage> {
           cloudCourses.forEach((courseCode, courseData) {
             final String targetSemesterName =
                 courseData['semester'] ?? 'Semester 1';
-
-            // Find if the semester block already exists in our temporary list
             int semIndex = freshSemesters.indexWhere(
               (s) => s.semesterName == targetSemesterName,
             );
-
-            // If the semester doesn't exist yet, create it!
             if (semIndex == -1) {
               freshSemesters.add(
                 Semester(semesterName: targetSemesterName, courses: []),
               );
               semIndex = freshSemesters.length - 1;
             }
-
-            // Pack the course item into its matching targeted semester bucket
             freshSemesters[semIndex].courses.add({
               'code': courseCode,
               'name': courseData['courseName'] ?? '',
@@ -102,29 +92,26 @@ class _CreditPageState extends State<CreditPage> {
             });
           });
 
-          // Sort semesters chronologically by name so Semester 1 is always first
           freshSemesters.sort(
             (a, b) => a.semesterName.compareTo(b.semesterName),
           );
 
           setState(() {
             semesters = freshSemesters;
-            // Prevent the app from crashing if current semester index falls out of bounds
             if (currentSemesterIndex >= semesters.length) {
               currentSemesterIndex = semesters.length - 1;
             }
           });
-
-          // Overwrite the local cache with the newly sorted cloud data structure
           await saveCourses();
         }
       }
     } catch (e) {
-      debugPrint("Error pulling data down from Firebase: $e");
+      debugPrint("Error pulling data from Firebase: $e");
     }
   }
 
-  // ===== CALCULATION =====
+  // ── Calculations ───────────────────────────────────────────────────────────
+
   int get totalCredits {
     int sum = 0;
     for (var sem in semesters) {
@@ -147,7 +134,7 @@ class _CreditPageState extends State<CreditPage> {
 
   double get semesterGPA {
     if (currentSemester.courses.isEmpty) return 0;
-    final gradeMapping = {
+    const gradeMapping = {
       'A+': 4.3,
       'A': 4.0,
       'A-': 3.7,
@@ -185,6 +172,8 @@ class _CreditPageState extends State<CreditPage> {
     return 'F';
   }
 
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
   void addCourse(String name, String code, int credits, String grade) {
     setState(() {
       semesters[currentSemesterIndex].courses.add({
@@ -196,26 +185,26 @@ class _CreditPageState extends State<CreditPage> {
     });
     saveCourses();
 
-    final String cleanCourseCode = code.trim().isNotEmpty
+    final String cleanCode = code.trim().isNotEmpty
         ? code.trim()
         : name.trim().replaceAll(' ', '_');
 
     _firestoreService.saveOrUpdateCourse(
       uid: widget.studentID,
       semesterName: currentSemester.semesterName,
-      courseCode: cleanCourseCode,
+      courseCode: cleanCode,
       courseName: name,
       grade: grade,
       credits: credits,
     );
   }
 
+  // ── Dialogs ────────────────────────────────────────────────────────────────
+
   void showAddCourseDialog() {
-    String name = "";
-    String code = "";
-    String creditInput = "";
+    String name = "", code = "", creditInput = "";
     String selectedGrade = "A+";
-    final grades = [
+    const grades = [
       'A+',
       'A',
       'A-',
@@ -231,120 +220,100 @@ class _CreditPageState extends State<CreditPage> {
 
     showDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final cs = Theme.of(context).colorScheme;
-            return Dialog(
-              backgroundColor: cs.surfaceContainerLow,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final cs = Theme.of(context).colorScheme;
+          return AlertDialog(
+            backgroundColor: cs.surfaceContainerLow, // #16121E
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: cs.surfaceBright, width: 1.5), // #3C096C
+            ),
+            title: Text(
+              "ADD A COURSE",
+              style: GoogleFonts.orbitron(
+                color: cs.primaryContainer, // #C77DFF
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Add Course",
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _dialogTextField(
+                    context,
+                    "Course Name",
+                    onChanged: (v) => name = v,
+                  ),
+                  const SizedBox(height: 12),
+                  _dialogTextField(
+                    context,
+                    "Course Code",
+                    onChanged: (v) => code = v,
+                  ),
+                  const SizedBox(height: 12),
+                  _dialogTextField(
+                    context,
+                    "Credits",
+                    keyboardType: TextInputType.number,
+                    onChanged: (v) => creditInput = v,
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedGrade,
+                        isExpanded: true,
+                        dropdownColor: cs.surfaceContainerHigh,
+                        style: GoogleFonts.outfit(color: cs.onSurface),
+                        items: grades
+                            .map(
+                              (g) => DropdownMenuItem(value: g, child: Text(g)),
+                            )
+                            .toList(),
+                        onChanged: (v) =>
+                            setDialogState(() => selectedGrade = v!),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _dialogTextField(
-                      context,
-                      "Course Name",
-                      onChanged: (v) => name = v,
-                    ),
-                    const SizedBox(height: 12),
-                    _dialogTextField(
-                      context,
-                      "Course Code",
-                      onChanged: (v) => code = v,
-                    ),
-                    const SizedBox(height: 12),
-                    _dialogTextField(
-                      context,
-                      "Credits",
-                      keyboardType: TextInputType.number,
-                      onChanged: (v) => creditInput = v,
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: cs.outlineVariant),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedGrade,
-                          isExpanded: true,
-                          dropdownColor: cs.surfaceContainerHigh,
-                          style: TextStyle(color: cs.onSurface),
-                          items: grades
-                              .map(
-                                (g) =>
-                                    DropdownMenuItem(value: g, child: Text(g)),
-                              )
-                              .toList(),
-                          onChanged: (v) =>
-                              setDialogState(() => selectedGrade = v!),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: purpleMain,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onPressed: () {
-                              final credits = int.tryParse(creditInput);
-                              if (name.isNotEmpty && credits != null) {
-                                addCourse(name, code, credits, selectedGrade);
-                              }
-                              Navigator.pop(context);
-                            },
-                            child: const Text("Add"),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cs.surfaceContainerHighest,
-                              foregroundColor: cs.onSurfaceVariant,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text("Cancel"),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  "Cancel",
+                  style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               ),
-            );
-          },
-        );
-      },
+              TextButton(
+                onPressed: () {
+                  final credits = int.tryParse(creditInput);
+                  if (name.isNotEmpty && credits != null) {
+                    addCourse(name, code, credits, selectedGrade);
+                  }
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  "Add",
+                  style: GoogleFonts.orbitron(
+                    color: cs.primaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -357,24 +326,20 @@ class _CreditPageState extends State<CreditPage> {
     final cs = Theme.of(context).colorScheme;
     return TextField(
       keyboardType: keyboardType,
-      style: TextStyle(color: cs.onSurface),
+      style: GoogleFonts.outfit(color: cs.onSurface),
       onChanged: onChanged,
       decoration: InputDecoration(
         hintText: label,
-        hintStyle: TextStyle(color: cs.onSurfaceVariant),
+        hintStyle: GoogleFonts.outfit(color: cs.onSurfaceVariant),
         filled: true,
         fillColor: cs.surfaceContainerHigh,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: cs.outlineVariant),
-        ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: cs.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: purpleMain),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: purpleLight, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -384,123 +349,147 @@ class _CreditPageState extends State<CreditPage> {
     );
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final gpa = semesterGPA;
-
-    final containerBg = cs.surfaceContainerLow;
-    final containerBorder = cs.onSurface.withOpacity(0.10);
-    final purpleOverlay = purpleMain.withOpacity(0.20);
-    final purpleOverlayLight = purpleMain.withOpacity(0.15);
+    final progress = (totalCredits / graduationCredits).clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: cs.surface,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 5),
-        child: FloatingActionButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  GpaCalculatorPage(), // 👈 Pointed cleanly to GPAPredictor in study.dart
-            ),
+      backgroundColor: cs.surface, // #0B090A
+      appBar: AppBar(
+        backgroundColor: cs.surface,
+        elevation: 0,
+        title: Text(
+          "RECORD LOG",
+          style: GoogleFonts.orbitron(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+            letterSpacing: 1.5,
           ),
-          backgroundColor: purpleMain,
-          foregroundColor: Colors.white,
-          tooltip: "GPA Calculator",
-          child: const Icon(Icons.calculate_rounded),
         ),
+        centerTitle: true,
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => GpaCalculatorPage()),
+        ),
+        backgroundColor: cs.outline, // #7B2CBF
+        foregroundColor: cs.onPrimary,
+        tooltip: "GPA Calculator",
+        child: const Icon(Icons.calculate_rounded),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.menu_book, color: purpleLight, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Transcript",
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: purpleOverlay,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: purpleMain.withOpacity(0.30)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.emoji_events,
-                        color: Colors.amber.shade400,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        "${semesters.fold(0, (sum, s) => sum + s.courses.length)} courses",
-                        style: TextStyle(
-                          color: Colors.amber.shade600,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            // ── 1. HEADER ROW ─────────────────────────────────────────────
+            // Row(
+            //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //   children: [
+            //     Row(
+            //       children: [
+            //         Icon(Icons.menu_book, color: cs.primaryContainer, size: 22),
+            //         const SizedBox(width: 8),
+            //         Text(
+            //           "Academic Archive",
+            //           style: GoogleFonts.outfit(
+            //             color: cs.onSurface,
+            //             fontSize: 16,
+            //             fontWeight: FontWeight.w600,
+            //           ),
+            //         ),
+            //       ],
+            //     ),
+            //     Container(
+            //       padding: const EdgeInsets.symmetric(
+            //         horizontal: 12,
+            //         vertical: 4,
+            //       ),
+            //       decoration: BoxDecoration(
+            //         color: cs.surfaceBright.withOpacity(0.4), // #3C096C faint
+            //         borderRadius: BorderRadius.circular(999),
+            //         border: Border.all(color: cs.outline.withOpacity(0.4)),
+            //       ),
+            //       child: Row(
+            //         children: [
+            //           Icon(
+            //             Icons.emoji_events,
+            //             color: Colors.amber.shade400,
+            //             size: 14,
+            //           ),
+            //           const SizedBox(width: 4),
+            //           Text(
+            //             "${semesters.fold(0, (sum, s) => sum + s.courses.length)} modules",
+            //             style: GoogleFonts.outfit(
+            //               color: Colors.amber.shade500,
+            //               fontSize: 12,
+            //               fontWeight: FontWeight.w600,
+            //             ),
+            //           ),
+            //         ],
+            //       ),
+            //     ),
+            //   ],
+            // ),
+            // const SizedBox(height: 16),
+
+            // ── 2. GRADUATION PROGRESS BAR ────────────────────────────────
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: containerBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: containerBorder),
+                color: cs.surfaceContainerLow, // #16121E
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.outlineVariant, width: 1.5),
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "Total Credits",
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
+                        "GRADUATION PROGRESS",
+                        style: GoogleFonts.orbitron(
+                          color: cs.inversePrimary, // #9D4EDD
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
                         ),
                       ),
                       Text(
-                        "$totalCredits/$graduationCredits",
-                        style: const TextStyle(color: purpleMain, fontSize: 12),
+                        "$totalCredits / $graduationCredits CR",
+                        style: GoogleFonts.orbitron(
+                          color: cs.primaryContainer,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(99),
                     child: LinearProgressIndicator(
-                      value: (totalCredits / graduationCredits).clamp(0.0, 1.0),
-                      minHeight: 6,
-                      backgroundColor: containerBorder,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        purpleMain,
+                      value: progress,
+                      minHeight: 8,
+                      backgroundColor: cs.outlineVariant.withOpacity(0.3),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        cs.primaryContainer,
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "${(progress * 100).toStringAsFixed(1)}% complete",
+                    style: GoogleFonts.outfit(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 11,
                     ),
                   ),
                 ],
@@ -508,7 +497,7 @@ class _CreditPageState extends State<CreditPage> {
             ),
             const SizedBox(height: 12),
 
-            // ===== NEW COMBINED SEMESTER ROW WITH ADD BUTTON =====
+            // ── 3. SEMESTER NAVIGATOR ─────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -518,23 +507,24 @@ class _CreditPageState extends State<CreditPage> {
                       setState(() => currentSemesterIndex--);
                     }
                   },
-                  icon: Icon(Icons.chevron_left, color: cs.onSurfaceVariant),
+                  icon: Icon(Icons.chevron_left, color: cs.primaryContainer),
                 ),
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: purpleOverlayLight,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: purpleMain.withOpacity(0.30)),
+                      color: cs.surfaceBright.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cs.outline.withOpacity(0.4)),
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      currentSemester.semesterName,
-                      style: TextStyle(
+                      currentSemester.semesterName.toUpperCase(),
+                      style: GoogleFonts.orbitron(
                         color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
                       ),
                     ),
                   ),
@@ -556,52 +546,62 @@ class _CreditPageState extends State<CreditPage> {
                       saveCourses();
                     }
                   },
-                  icon: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+                  icon: Icon(Icons.chevron_right, color: cs.primaryContainer),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: purpleMain,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                const SizedBox(width: 4),
+                // ADD button
+                GestureDetector(
+                  onTap: showAddCourseDialog,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 14,
                       vertical: 10,
                     ),
-                  ),
-                  onPressed: showAddCourseDialog,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text(
-                    "Add",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    decoration: BoxDecoration(
+                      color: cs.outline, // #7B2CBF
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.add, color: Colors.white, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          "ADD COURSE",
+                          style: GoogleFonts.orbitron(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
+
+            // ── 4. STAT CARDS ─────────────────────────────────────────────
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
-              childAspectRatio: 3.5,
+              childAspectRatio: 3.2,
               children: [
                 _statCard(
                   context,
                   icon: Icons.menu_book,
-                  iconColor: purpleLight,
-                  iconBg: purpleOverlay,
+                  iconColor: cs.primaryContainer,
+                  iconBg: cs.surfaceBright.withOpacity(0.4),
                   label: "Credits",
                   value: "$semesterCredits",
                 ),
                 _statCard(
                   context,
                   icon: Icons.trending_up,
-                  iconColor: Colors.green.shade400,
+                  iconColor: Colors.greenAccent.shade400,
                   iconBg: Colors.green.withOpacity(0.15),
                   label: "GPA",
                   value: currentSemester.courses.isEmpty
@@ -611,7 +611,7 @@ class _CreditPageState extends State<CreditPage> {
                 _statCard(
                   context,
                   icon: Icons.school,
-                  iconColor: Colors.blue.shade300,
+                  iconColor: Colors.lightBlueAccent,
                   iconBg: Colors.blue.withOpacity(0.12),
                   label: "T-Score",
                   value: "–",
@@ -621,106 +621,147 @@ class _CreditPageState extends State<CreditPage> {
                   icon: Icons.emoji_events,
                   iconColor: Colors.amber.shade400,
                   iconBg: Colors.amber.withOpacity(0.12),
-                  label: "Rank",
+                  label: "Class Rank",
                   value: "–",
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
+            // ── 5. COURSE LIST ────────────────────────────────────────────
             if (currentSemester.courses.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.menu_book,
-                        size: 40,
-                        color: cs.onSurfaceVariant.withOpacity(0.4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant, width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.inbox_outlined,
+                      size: 40,
+                      color: cs.onSurfaceVariant.withOpacity(0.4),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "No courses enrolled this semester.",
+                      style: GoogleFonts.outfit(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 12,
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        "No courses for this semester",
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               )
-            else
+            else ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 10),
+                child: Text(
+                  "ENROLLED MODULES",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: cs.inversePrimary, // #9D4EDD
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
               ...currentSemester.courses.asMap().entries.map((entry) {
                 final course = entry.value;
                 final grade = course['grade'] ?? '–';
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: containerBg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: containerBorder),
+                      color: cs.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: cs.outlineVariant.withOpacity(0.5),
+                      ),
                     ),
                     child: Row(
                       children: [
+                        // Category color bar (left accent)
+                        Container(
+                          width: 4,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Course icon
                         Container(
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: purpleOverlay,
+                            color: cs.surfaceBright.withOpacity(0.4),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.menu_book,
-                            color: purpleMain,
+                            color: cs.primaryContainer,
                             size: 18,
                           ),
                         ),
                         const SizedBox(width: 10),
+
+                        // Course name + code
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 course['name'] ?? '',
-                                style: TextStyle(
+                                style: GoogleFonts.outfit(
                                   color: cs.onSurface,
                                   fontSize: 13,
+                                  fontWeight: FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                course['code'] ?? 'Course Code',
-                                style: TextStyle(
-                                  color: cs.onSurfaceVariant.withOpacity(0.6),
+                                course['code'] ?? 'No Code',
+                                style: GoogleFonts.outfit(
+                                  color: cs.onSurfaceVariant,
                                   fontSize: 10,
                                 ),
                               ),
                             ],
                           ),
                         ),
+
+                        // Credits
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
-                              "Credits",
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant.withOpacity(0.7),
-                                fontSize: 9,
+                              "CR",
+                              style: GoogleFonts.orbitron(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 8,
                               ),
                             ),
                             Text(
                               "${course['credits']}",
-                              style: TextStyle(
+                              style: GoogleFonts.orbitron(
                                 color: cs.onSurface,
                                 fontSize: 12,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
+
+                        // Grade badge
                         Container(
                           width: 44,
                           height: 44,
@@ -730,21 +771,23 @@ class _CreditPageState extends State<CreditPage> {
                               end: Alignment.bottomRight,
                               colors: [purpleMain, purpleDark],
                             ),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: purpleMain.withOpacity(0.4),
+                              color: purpleLight.withOpacity(0.3),
                             ),
                           ),
                           alignment: Alignment.center,
                           child: Text(
                             grade,
-                            style: const TextStyle(
+                            style: GoogleFonts.orbitron(
                               color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
+
+                        // Delete
                         IconButton(
                           icon: Icon(
                             Icons.delete_outline,
@@ -752,13 +795,12 @@ class _CreditPageState extends State<CreditPage> {
                             size: 18,
                           ),
                           onPressed: () {
-                            final removedCourse =
-                                currentSemester.courses[entry.key];
+                            final removed = currentSemester.courses[entry.key];
                             final String targetCode =
-                                (removedCourse['code'] != null &&
-                                    removedCourse['code'].toString().isNotEmpty)
-                                ? removedCourse['code']
-                                : removedCourse['name'].toString().replaceAll(
+                                (removed['code'] != null &&
+                                    removed['code'].toString().isNotEmpty)
+                                ? removed['code']
+                                : removed['name'].toString().replaceAll(
                                     ' ',
                                     '_',
                                   );
@@ -767,8 +809,6 @@ class _CreditPageState extends State<CreditPage> {
                               () => currentSemester.courses.removeAt(entry.key),
                             );
                             saveCourses();
-
-                            // Remote cloud update
                             _firestoreService.deleteCourse(
                               uid: widget.studentID,
                               courseCode: targetCode,
@@ -780,11 +820,14 @@ class _CreditPageState extends State<CreditPage> {
                   ),
                 );
               }).toList(),
+            ],
           ],
         ),
       ),
     );
   }
+
+  // ── Stat Card ──────────────────────────────────────────────────────────────
 
   Widget _statCard(
     BuildContext context, {
@@ -799,8 +842,8 @@ class _CreditPageState extends State<CreditPage> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.onSurface.withOpacity(0.10)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant, width: 1.2),
       ),
       child: Row(
         children: [
@@ -821,14 +864,17 @@ class _CreditPageState extends State<CreditPage> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
+                  style: GoogleFonts.outfit(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
                 ),
                 Text(
                   value,
-                  style: TextStyle(
+                  style: GoogleFonts.orbitron(
                     color: cs.onSurface,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
