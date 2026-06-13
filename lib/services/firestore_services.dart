@@ -52,4 +52,29 @@ class FirestoreService {
       print("Firebase Save Pet Error: $e");
     }
   }
+
+  Future<void> saveAIConfig({
+    required String uid,
+    required Map<String, dynamic> config,
+  }) async {
+    try {
+      await _firestore.collection('users').doc(uid).set({
+        'ai_config': config,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print("Firebase Save AI Config Error: $e");
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAIConfig(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return doc.data()?['ai_config'] as Map<String, dynamic>?;
+      }
+    } catch (e) {
+      print("Firebase Get AI Config Error: $e");
+    }
+    return null;
+  }
 }

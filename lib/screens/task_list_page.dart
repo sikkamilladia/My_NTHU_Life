@@ -18,6 +18,7 @@ class _TaskListPageState extends State<TaskListPage> {
   bool _isLoadingCourses = true;
 
   final List<String> _categories = [
+    'Class',
     'Homework',
     'Quiz',
     'Lab',
@@ -86,6 +87,8 @@ class _TaskListPageState extends State<TaskListPage> {
 
   int _calculateExpForCategory(String category) {
     switch (category) {
+      case 'Class':
+        return 3;
       case 'Homework':
         return 5;
       case 'Quiz':
@@ -124,6 +127,8 @@ class _TaskListPageState extends State<TaskListPage> {
   Color _getCategoryColor(String category) {
     // Category colors are semantic/fixed — kept as explicit constants
     switch (category) {
+      case 'Class':
+        return const Color(0xFFA594F9);
       case 'Homework':
         return const Color(0xFF9D4EDD);
       case 'Quiz':

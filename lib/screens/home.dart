@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/main.dart';
 import 'package:my_nthu_life/screens/profile.dart';
+import 'package:my_nthu_life/screens/ai_config_screen.dart';
 import 'package:my_nthu_life/screens/task_list_page.dart';
+import 'package:my_nthu_life/services/ai_service.dart';
 import 'package:my_nthu_life/widgets/pet_dashboard_widget.dart';
 import 'task_list_page.dart';
 import 'transcript.dart';
@@ -37,7 +39,7 @@ class _HomeState extends State<Home> {
     _pages = [
       _HomePage(studentID: widget.studentID),
       CreditPage(studentID: widget.studentID),
-      AIStudyMaterialWidget(),
+      AIStudyMaterialWidget(studentID: widget.studentID),
       TaskListPage(studentID: widget.studentID),
       PartyPage(studentID: widget.studentID),
     ];
@@ -139,6 +141,27 @@ class _HomeState extends State<Home> {
                     MaterialPageRoute(
                       builder: (context) =>
                           ProfileScreen(studentID: widget.studentID),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.psychology_outlined),
+                title: Text(
+                  "AI Config",
+                  style: GoogleFonts.orbitron(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          AIConfigScreen(studentID: widget.studentID),
                     ),
                   );
                 },
@@ -379,8 +402,6 @@ class _HomePage extends StatelessWidget {
         children: [
           _HeroCard(studentID: studentID),
           const SizedBox(height: 14),
-          // _QuickStatsRow(studentID: studentID),
-          // const SizedBox(height: 20),
           ValueListenableBuilder<int>(
             valueListenable: totalCreditsNotifier,
             builder: (context, credits, child) {
@@ -669,6 +690,8 @@ class _TodayMissionsCard extends StatelessWidget {
 
   Color _getCategoryColor(String cat) {
     switch (cat) {
+      case 'Class':
+        return const Color(0xFFA594F9);
       case 'Homework':
         return const Color(0xFF9D4EDD);
       case 'Quiz':
