@@ -722,7 +722,7 @@ class _TaskListPageState extends State<TaskListPage> {
                                                   setState(() {
                                                     task['isDone'] = true;
                                                   });
-
+                                                  // 1. mark task as done
                                                   await FirebaseFirestore
                                                       .instance
                                                       .collection('users')
@@ -730,6 +730,25 @@ class _TaskListPageState extends State<TaskListPage> {
                                                       .collection('tasks')
                                                       .doc(doc.id)
                                                       .update({'isDone': true});
+                                                  // 2. weekly XP user
+                                                  await FirebaseFirestore.instance
+                                                      .collection('users')
+                                                      .doc(widget.studentID)
+                                                      .set({
+                                                        'weeklyXP': FieldValue.increment(expGained),
+                                                      }, SetOptions(merge: true));
+                                                  // 3. Tambah XP party
+                                                  final partyQuery = await FirebaseFirestore.instance
+                                                      .collection('parties')
+                                                      .where('memberIDs', arrayContains: widget.studentID)
+                                                      .limit(1)
+                                                      .get();
+
+                                                  if (partyQuery.docs.isNotEmpty) {
+                                                    await partyQuery.docs.first.reference.update({
+                                                      'totalWeeklyXP': FieldValue.increment(expGained),
+                                                    });
+                                                  }
                                                 },
                                         ),
                                       ),

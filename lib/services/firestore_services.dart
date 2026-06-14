@@ -119,6 +119,15 @@ class FirestoreService {
     required String studentID,
   }) async {
     try {
+      final existingParty = await _firestore
+          .collection('parties')
+          .where('memberIDs', arrayContains: studentID)
+          .limit(1)
+          .get();
+
+      if (existingParty.docs.isNotEmpty) {
+        return false;
+      }
       final query = await _firestore
           .collection('parties')
           .where('inviteCode', isEqualTo: inviteCode.toUpperCase())
@@ -174,14 +183,23 @@ class FirestoreService {
         doc.data()['memberIDs'] ?? [],
       );
 
+      final creatorID = doc.data()['creatorID'];
+
       members.remove(studentID);
 
       if (members.isEmpty) {
         await doc.reference.delete();
       } else {
-        await doc.reference.update({
-          'memberIDs': members,
-        });
+        if (studentID == creatorID) {
+          await doc.reference.update({
+            'memberIDs': members,
+            'creatorID': members.first,
+          });
+        } else {
+          await doc.reference.update({
+            'memberIDs': members,
+          });
+        }
       }
     } catch (e) {
       print("Leave Party Error: $e");
