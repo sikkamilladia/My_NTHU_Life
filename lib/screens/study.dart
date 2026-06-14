@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/services/ai_service.dart';
@@ -5,7 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 class AIStudyMaterialWidget extends StatefulWidget {
-  const AIStudyMaterialWidget({super.key});
+  final String studentID;
+  const AIStudyMaterialWidget({super.key, required this.studentID});
 
   @override
   State<AIStudyMaterialWidget> createState() => _AIStudyMaterialWidgetState();
@@ -14,12 +16,53 @@ class AIStudyMaterialWidget extends StatefulWidget {
 class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   final TextEditingController _controller = TextEditingController();
   List<Map<String, dynamic>> videos = [];
+  List<Map<String, dynamic>> recommendedVideos = [];
   bool isLoading = false;
+  bool isRecommendedLoading = false;
   String? summaryResult;
   bool isSummarizing = false;
   bool hasSearched = false;
   bool isGeneratingQuiz = false;
   Map<String, dynamic>? quizResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecommendedVideos();
+  }
+
+  Future<void> _fetchRecommendedVideos() async {
+    try {
+      setState(() => isRecommendedLoading = true);
+      final now = DateTime.now();
+      final todayKey = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      
+      final planDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .collection('ai_daily_plans')
+          .doc(todayKey)
+          .get();
+
+      if (planDoc.exists) {
+        final quests = planDoc.data()?['ai_quests'] as List? ?? [];
+        if (quests.isNotEmpty) {
+          // Combine all queries or just pick the first few
+          final query = quests.map((q) => q['youtube_query']).join(" ");
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(widget.studentID).get();
+          final aiConfig = userDoc.data()?['ai_config'] as Map<String, dynamic>?;
+
+          final result = await AIService.generateRoadmap(query, aiConfig: aiConfig);
+          setState(() {
+            recommendedVideos = List<Map<String, dynamic>>.from(result["videos"] ?? []);
+          });
+        }
+      }
+      setState(() => isRecommendedLoading = false);
+    } catch (e) {
+      setState(() => isRecommendedLoading = false);
+    }
+  }
 
   String? getThumbnailUrl(String? url) {
     if (url == null || url.isEmpty) return null;
@@ -54,6 +97,66 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // --- 0. RECOMMENDED FOR YOU (AGENTIC) ---
+              if (isRecommendedLoading)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: cs.primaryContainer.withOpacity(0.3)),
+                  ),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(color: cs.primaryContainer, strokeWidth: 2),
+                        const SizedBox(height: 12),
+                        Text("AI is preparing your tactical materials...", 
+                          style: GoogleFonts.orbitron(fontSize: 10, color: cs.primaryContainer)),
+                      ],
+                    ),
+                  ),
+                )
+              else if (recommendedVideos.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [cs.primaryContainer.withOpacity(0.15), cs.surfaceContainerLow],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: cs.primaryContainer.withOpacity(0.5), width: 1.5),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.auto_awesome_rounded, color: cs.primaryContainer, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            "RECOMMENDED FOR YOUR PLAN",
+                            style: GoogleFonts.orbitron(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: cs.primaryContainer,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...recommendedVideos.take(2).map((v) => _buildVideoItem(cs, v)).toList(),
+                    ],
+                  ),
+                ),
+
               // --- 1. HEADER ---
               // Row(
               //   children: [
@@ -549,7 +652,15 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
         isLoading = true;
         hasSearched = true;
       });
-      final result = await AIService.generateRoadmap(topic);
+
+      // Fetch AI Config
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .get();
+      final aiConfig = doc.data()?['ai_config'] as Map<String, dynamic>?;
+
+      final result = await AIService.generateRoadmap(topic, aiConfig: aiConfig);
       setState(() {
         videos = List<Map<String, dynamic>>.from(result["videos"] ?? []);
         isLoading = false;

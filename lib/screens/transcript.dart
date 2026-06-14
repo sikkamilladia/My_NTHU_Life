@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_nthu_life/data/transcript_dummy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/screens/gpa_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,9 +48,74 @@ class _CreditPageState extends State<CreditPage> {
     totalCreditsNotifier.value = totalCredits;
   }
 
+  // Future<void> loadCourses() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   String? encoded = prefs.getString("Semesters_${widget.studentID}");
+  //   if (encoded != null) {
+  //     final List<dynamic> decodedData = jsonDecode(encoded);
+  //     setState(() {
+  //       semesters = decodedData.map((item) => Semester.fromJson(item)).toList();
+  //     });
+  //     totalCreditsNotifier.value = totalCredits;
+  //   }
+
+  //   try {
+  //     final docSnapshot = await FirebaseFirestore.instance
+  //         .collection('users')
+  //         .doc(widget.studentID)
+  //         .get();
+
+  //     if (docSnapshot.exists && docSnapshot.data() != null) {
+  //       final data = docSnapshot.data()!;
+  //       if (data['courses'] != null) {
+  //         final Map<String, dynamic> cloudCourses = data['courses'];
+  //         List<Semester> freshSemesters = [
+  //           Semester(semesterName: "Semester 1", courses: []),
+  //         ];
+
+  //         cloudCourses.forEach((courseCode, courseData) {
+  //           final String targetSemesterName =
+  //               courseData['semester'] ?? 'Semester 1';
+  //           int semIndex = freshSemesters.indexWhere(
+  //             (s) => s.semesterName == targetSemesterName,
+  //           );
+  //           if (semIndex == -1) {
+  //             freshSemesters.add(
+  //               Semester(semesterName: targetSemesterName, courses: []),
+  //             );
+  //             semIndex = freshSemesters.length - 1;
+  //           }
+  //           freshSemesters[semIndex].courses.add({
+  //             'code': courseCode,
+  //             'name': courseData['courseName'] ?? '',
+  //             'credits': courseData['credits'] ?? 0,
+  //             'grade': courseData['grade'] ?? '–',
+  //           });
+  //         });
+
+  //         freshSemesters.sort(
+  //           (a, b) => a.semesterName.compareTo(b.semesterName),
+  //         );
+
+  //         setState(() {
+  //           semesters = freshSemesters;
+  //           if (currentSemesterIndex >= semesters.length) {
+  //             currentSemesterIndex = semesters.length - 1;
+  //           }
+  //         });
+  //         await saveCourses();
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint("Error pulling data from Firebase: $e");
+  //   }
+  // }
+
   Future<void> loadCourses() async {
     final prefs = await SharedPreferences.getInstance();
     String? encoded = prefs.getString("Semesters_${widget.studentID}");
+
+    // 1. Load from SharedPreferences if exists
     if (encoded != null) {
       final List<dynamic> decodedData = jsonDecode(encoded);
       setState(() {
@@ -58,55 +124,83 @@ class _CreditPageState extends State<CreditPage> {
       totalCreditsNotifier.value = totalCredits;
     }
 
+    // 2. Try Firebase
     try {
       final docSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.studentID)
           .get();
 
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        final data = docSnapshot.data()!;
-        if (data['courses'] != null) {
-          final Map<String, dynamic> cloudCourses = data['courses'];
-          List<Semester> freshSemesters = [
-            Semester(semesterName: "Semester 1", courses: []),
-          ];
+      final hasFirebaseData =
+          docSnapshot.exists &&
+          docSnapshot.data() != null &&
+          docSnapshot.data()!['courses'] != null &&
+          (docSnapshot.data()!['courses'] as Map).isNotEmpty;
 
-          cloudCourses.forEach((courseCode, courseData) {
-            final String targetSemesterName =
-                courseData['semester'] ?? 'Semester 1';
-            int semIndex = freshSemesters.indexWhere(
-              (s) => s.semesterName == targetSemesterName,
-            );
-            if (semIndex == -1) {
-              freshSemesters.add(
-                Semester(semesterName: targetSemesterName, courses: []),
-              );
-              semIndex = freshSemesters.length - 1;
-            }
-            freshSemesters[semIndex].courses.add({
-              'code': courseCode,
-              'name': courseData['courseName'] ?? '',
-              'credits': courseData['credits'] ?? 0,
-              'grade': courseData['grade'] ?? '–',
-            });
-          });
+      if (hasFirebaseData) {
+        // Same parsing logic you already have
+        final Map<String, dynamic> cloudCourses = docSnapshot
+            .data()!['courses'];
+        List<Semester> freshSemesters = [];
 
-          freshSemesters.sort(
-            (a, b) => a.semesterName.compareTo(b.semesterName),
+        cloudCourses.forEach((courseCode, courseData) {
+          final String targetSemesterName =
+              courseData['semester'] ?? 'Semester 1';
+          int semIndex = freshSemesters.indexWhere(
+            (s) => s.semesterName == targetSemesterName,
           );
-
-          setState(() {
-            semesters = freshSemesters;
-            if (currentSemesterIndex >= semesters.length) {
-              currentSemesterIndex = semesters.length - 1;
-            }
+          if (semIndex == -1) {
+            freshSemesters.add(
+              Semester(semesterName: targetSemesterName, courses: []),
+            );
+            semIndex = freshSemesters.length - 1;
+          }
+          freshSemesters[semIndex].courses.add({
+            'code': courseCode,
+            'name': courseData['courseName'] ?? '',
+            'credits': courseData['credits'] ?? 0,
+            'grade': courseData['grade'] ?? '–',
           });
-          await saveCourses();
-        }
+        });
+
+        freshSemesters.sort((a, b) => a.semesterName.compareTo(b.semesterName));
+
+        setState(() {
+          semesters = freshSemesters;
+          if (currentSemesterIndex >= semesters.length) {
+            currentSemesterIndex = semesters.length - 1;
+          }
+        });
+        await saveCourses();
+      } else if (encoded == null || semesters.every((s) => s.courses.isEmpty)) {
+        // 3. No data anywhere → seed defaults
+        setState(() => semesters = getDefaultSemesters());
+        await saveCourses(); // save to SharedPreferences
+        await _saveAllToFirebase(); // save to Firebase
+        totalCreditsNotifier.value = totalCredits;
       }
     } catch (e) {
       debugPrint("Error pulling data from Firebase: $e");
+    }
+  }
+
+  /// Writes every semester/course from [semesters] to Firebase at once.
+  Future<void> _saveAllToFirebase() async {
+    for (final sem in semesters) {
+      for (final course in sem.courses) {
+        final String code = (course['code'] as String).isNotEmpty
+            ? course['code']
+            : (course['name'] as String).replaceAll(' ', '_');
+
+        await _firestoreService.saveOrUpdateCourse(
+          uid: widget.studentID,
+          semesterName: sem.semesterName,
+          courseCode: code,
+          courseName: course['name'],
+          grade: course['grade'],
+          credits: course['credits'],
+        );
+      }
     }
   }
 
@@ -202,7 +296,7 @@ class _CreditPageState extends State<CreditPage> {
   // ── Dialogs ────────────────────────────────────────────────────────────────
 
   void showAddCourseDialog() {
-    String name = "", code = "", creditInput = "";
+    String name = "", creditInput = "";
     String selectedGrade = "A+";
     const grades = [
       'A+',
@@ -246,12 +340,12 @@ class _CreditPageState extends State<CreditPage> {
                     "Course Name",
                     onChanged: (v) => name = v,
                   ),
-                  const SizedBox(height: 12),
-                  _dialogTextField(
-                    context,
-                    "Course Code",
-                    onChanged: (v) => code = v,
-                  ),
+                  // const SizedBox(height: 12),
+                  // _dialogTextField(
+                  //   context,
+                  //   "Course Code",
+                  //   onChanged: (v) => code = v,
+                  // ),
                   const SizedBox(height: 12),
                   _dialogTextField(
                     context,
@@ -298,7 +392,7 @@ class _CreditPageState extends State<CreditPage> {
                 onPressed: () {
                   final credits = int.tryParse(creditInput);
                   if (name.isNotEmpty && credits != null) {
-                    addCourse(name, code, credits, selectedGrade);
+                    addCourse(name, '', credits, selectedGrade);
                   }
                   Navigator.pop(context);
                 },

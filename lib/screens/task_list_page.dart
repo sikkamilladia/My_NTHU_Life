@@ -18,6 +18,7 @@ class _TaskListPageState extends State<TaskListPage> {
   bool _isLoadingCourses = true;
 
   final List<String> _categories = [
+    'Class',
     'Homework',
     'Quiz',
     'Lab',
@@ -86,6 +87,8 @@ class _TaskListPageState extends State<TaskListPage> {
 
   int _calculateExpForCategory(String category) {
     switch (category) {
+      case 'Class':
+        return 3;
       case 'Homework':
         return 5;
       case 'Quiz':
@@ -124,6 +127,8 @@ class _TaskListPageState extends State<TaskListPage> {
   Color _getCategoryColor(String category) {
     // Category colors are semantic/fixed — kept as explicit constants
     switch (category) {
+      case 'Class':
+        return const Color(0xFFA594F9);
       case 'Homework':
         return const Color(0xFF9D4EDD);
       case 'Quiz':
@@ -152,24 +157,25 @@ class _TaskListPageState extends State<TaskListPage> {
       text: selectedCourse,
     );
 
+    // New recurrence variables
+    String selectedRepeat = "None"; // None, Daily, Weekly
+    List<int> selectedWeekdays = []; // 1=Mon, ..., 7=Sun
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              // surfaceContainerLow = cardDarkPurple (#16121E)
               backgroundColor: cs.surfaceContainerLow,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
-                // surfaceBright = selected-day purple (#3C096C)
                 side: BorderSide(color: cs.surfaceBright, width: 1.5),
               ),
               title: Text(
                 "Assign Matrix Quest",
                 style: GoogleFonts.orbitron(
                   fontWeight: FontWeight.bold,
-                  // primaryContainer = neon light purple (#C77DFF) — dialog title
                   color: cs.primaryContainer,
                   fontSize: 16,
                 ),
@@ -264,6 +270,88 @@ class _TaskListPageState extends State<TaskListPage> {
                           setDialogState(() => selectedCategory = val);
                       },
                     ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      dropdownColor: cs.surfaceContainerLow,
+                      value: selectedRepeat,
+                      style: GoogleFonts.outfit(color: cs.onSurface),
+                      decoration: InputDecoration(
+                        labelText: "Repeat",
+                        labelStyle: TextStyle(color: cs.primaryContainer),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: cs.surfaceBright),
+                        ),
+                      ),
+                      items: ["None", "Daily", "Weekly"]
+                          .map(
+                            (rep) =>
+                                DropdownMenuItem(value: rep, child: Text(rep)),
+                          )
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null)
+                          setDialogState(() => selectedRepeat = val);
+                      },
+                    ),
+                    if (selectedRepeat == "Weekly") ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Repeat on",
+                          style: GoogleFonts.outfit(
+                            color: cs.primaryContainer,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(7, (index) {
+                          int weekday = index + 1;
+                          bool isSelected = selectedWeekdays.contains(weekday);
+                          return GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                if (isSelected) {
+                                  selectedWeekdays.remove(weekday);
+                                } else {
+                                  selectedWeekdays.add(weekday);
+                                }
+                              });
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected
+                                    ? cs.primaryContainer
+                                    : Colors.transparent,
+                                border: Border.all(
+                                  color: isSelected
+                                      ? cs.primaryContainer
+                                      : cs.outline,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _weekLabels[index].substring(0, 1),
+                                  style: GoogleFonts.orbitron(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected
+                                        ? cs.onPrimaryContainer
+                                        : cs.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -300,9 +388,13 @@ class _TaskListPageState extends State<TaskListPage> {
                             'assignedDayString': _getDayStringKey(
                               _selectedDay!,
                             ),
+                            'repeatType': selectedRepeat,
+                            'repeatDays': selectedWeekdays,
                             'exp': computedExp,
                             'coins': computedCoins,
                             'isDone': false,
+                            'completedDates':
+                                [], // Track completion for recurring tasks
                             'createdAt': FieldValue.serverTimestamp(),
                           });
                     }
@@ -358,11 +450,47 @@ class _TaskListPageState extends State<TaskListPage> {
           .snapshots(),
       builder: (context, snapshot) {
         final Map<String, List<DocumentSnapshot>> tasksByDay = {};
+
         if (snapshot.hasData) {
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data();
-            final dayKey = data['assignedDayString'] as String? ?? '';
-            tasksByDay.putIfAbsent(dayKey, () => []).add(doc);
+          // Get all days in the current focused month to populate tasksByDay
+          int daysInMonth = DateUtils.getDaysInMonth(
+            _focusedMonth.year,
+            _focusedMonth.month,
+          );
+
+          for (int d = 1; d <= daysInMonth; d++) {
+            String dayKey = _getDayStringKey(d);
+            DateTime date = DateTime(
+              _focusedMonth.year,
+              _focusedMonth.month,
+              d,
+            );
+            int weekday = date.weekday; // 1=Mon, ..., 7=Sun
+
+            for (var doc in snapshot.data!.docs) {
+              final data = doc.data();
+              final assignedDayStr = data['assignedDayString'] as String? ?? '';
+              final repeatType = data['repeatType'] as String? ?? 'None';
+              final repeatDays = List<int>.from(data['repeatDays'] ?? []);
+
+              bool applies = false;
+              if (repeatType == 'None') {
+                if (assignedDayStr == dayKey) applies = true;
+              } else {
+                // For recurring tasks, they must start on or after assignedDayString
+                if (dayKey.compareTo(assignedDayStr) >= 0) {
+                  if (repeatType == 'Daily') {
+                    applies = true;
+                  } else if (repeatType == 'Weekly') {
+                    if (repeatDays.contains(weekday)) applies = true;
+                  }
+                }
+              }
+
+              if (applies) {
+                tasksByDay.putIfAbsent(dayKey, () => []).add(doc);
+              }
+            }
           }
         }
 
@@ -668,88 +796,215 @@ class _TaskListPageState extends State<TaskListPage> {
                                     final Color catColor = _getCategoryColor(
                                       category,
                                     );
-                                    final int expGained = task['exp'] ?? 10;
-                                    final int coinsGained = task['coins'] ?? 5;
 
-                                    return Card(
-                                      color: cs.surfaceContainerLow,
-                                      margin: const EdgeInsets.only(bottom: 10),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        side: BorderSide(
-                                          color: cs.outlineVariant.withOpacity(
-                                            0.5,
+                                    final repeatType =
+                                        task['repeatType'] as String? ?? 'None';
+                                    final completedDates = List<String>.from(
+                                      task['completedDates'] ?? [],
+                                    );
+                                    final isDone = repeatType == 'None'
+                                        ? (task['isDone'] ?? false)
+                                        : completedDates.contains(
+                                            selectedTargetKey,
+                                          );
+
+                                    return Dismissible(
+                                      key: Key(doc.id),
+                                      direction: DismissDirection.endToStart,
+                                      background: Container(
+                                        margin: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade800,
+                                          borderRadius: BorderRadius.circular(
+                                            14,
                                           ),
+                                        ),
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.only(
+                                          right: 20,
+                                        ),
+                                        child: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.white,
                                         ),
                                       ),
-                                      child: ListTile(
-                                        leading: Container(
-                                          width: 4,
-                                          height: 26,
-                                          color: catColor,
+                                      confirmDismiss: (_) async {
+                                        return await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                backgroundColor:
+                                                    cs.surfaceContainerLow,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                  side: BorderSide(
+                                                    color: cs.surfaceBright,
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                title: Text(
+                                                  'DELETE QUEST?',
+                                                  style: GoogleFonts.orbitron(
+                                                    color: cs.error,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                content: Text(
+                                                  'This quest will be permanently removed.',
+                                                  style: GoogleFonts.outfit(
+                                                    color: cs.onSurfaceVariant,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          ctx,
+                                                          false,
+                                                        ),
+                                                    child: Text(
+                                                      'Cancel',
+                                                      style: TextStyle(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          ctx,
+                                                          true,
+                                                        ),
+                                                    child: Text(
+                                                      'Delete',
+                                                      style:
+                                                          GoogleFonts.orbitron(
+                                                            color: cs.error,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ) ??
+                                            false;
+                                      },
+                                      onDismissed: (_) async {
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(widget.studentID)
+                                            .collection('tasks')
+                                            .doc(doc.id)
+                                            .delete();
+                                      },
+                                      child: Card(
+                                        color: cs.surfaceContainerLow,
+                                        margin: const EdgeInsets.only(
+                                          bottom: 10,
                                         ),
-                                        title: Text(
-                                          task['title'] ?? '',
-                                          style: GoogleFonts.outfit(
-                                            color: cs.onSurface,
-                                            fontSize: 15,
-                                            decoration:
-                                                (task['isDone'] ?? false)
-                                                ? TextDecoration.lineThrough
-                                                : null,
-                                            decorationColor: Colors.grey,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          side: BorderSide(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.5),
                                           ),
                                         ),
-                                        subtitle: Text(
-                                          "${courseName.toUpperCase()} • $category",
-                                          style: GoogleFonts.outfit(
-                                            color: cs.onSurfaceVariant,
-                                            fontSize: 11,
+                                        child: ListTile(
+                                          leading: Container(
+                                            width: 4,
+                                            height: 26,
+                                            color: catColor,
                                           ),
-                                        ),
-                                        trailing: IconButton(
-                                          icon: Icon(
-                                            (task['isDone'] ?? false)
-                                                ? Icons.check_circle
-                                                : Icons.radio_button_off,
-                                            color: (task['isDone'] ?? false)
-                                                ? Colors.greenAccent
-                                                : cs.primary,
+                                          title: Text(
+                                            task['title'] ?? '',
+                                            style: GoogleFonts.outfit(
+                                              color: cs.onSurface,
+                                              fontSize: 15,
+                                              decoration: isDone
+                                                  ? TextDecoration.lineThrough
+                                                  : null,
+                                              decorationColor: Colors.grey,
+                                            ),
                                           ),
-                                          onPressed: (task['isDone'] ?? false)
-                                              ? null
-                                              : () async {
-                                                  setState(() {
-                                                    task['isDone'] = true;
-                                                  });
-                                                  // 1. mark task as done
-                                                  await FirebaseFirestore
-                                                      .instance
-                                                      .collection('users')
-                                                      .doc(widget.studentID)
-                                                      .collection('tasks')
-                                                      .doc(doc.id)
-                                                      .update({'isDone': true});
-                                                  // 2. weekly XP user
+                                          subtitle: Text(
+                                            "${courseName.toUpperCase()} • $category${repeatType != 'None' ? ' ($repeatType)' : ''}",
+                                            style: GoogleFonts.outfit(
+                                              color: cs.onSurfaceVariant,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          trailing: IconButton(
+                                            icon: Icon(
+                                              isDone
+                                                  ? Icons.check_circle
+                                                  : Icons.radio_button_off,
+                                              color: isDone
+                                                  ? Colors.greenAccent
+                                                  : cs.primary,
+                                            ),
+                                            onPressed: () async {
+                                              final int expGained = task['exp'] ?? 0;
+
+                                              if (repeatType == 'None') {
+                                                await FirebaseFirestore.instance
+                                                    .collection('users')
+                                                    .doc(widget.studentID)
+                                                    .collection('tasks')
+                                                    .doc(doc.id)
+                                                    .update({
+                                                  'isDone': !isDone,
+                                                });
+
+                                                if (!isDone) {
                                                   await FirebaseFirestore.instance
                                                       .collection('users')
                                                       .doc(widget.studentID)
                                                       .set({
-                                                        'weeklyXP': FieldValue.increment(expGained),
-                                                      }, SetOptions(merge: true));
-                                                  // 3. Tambah XP party
+                                                    'weeklyXP': FieldValue.increment(expGained),
+                                                  }, SetOptions(merge: true));
+
                                                   final partyQuery = await FirebaseFirestore.instance
                                                       .collection('parties')
-                                                      .where('memberIDs', arrayContains: widget.studentID)
+                                                      .where(
+                                                        'memberIDs',
+                                                        arrayContains: widget.studentID,
+                                                      )
                                                       .limit(1)
                                                       .get();
 
                                                   if (partyQuery.docs.isNotEmpty) {
                                                     await partyQuery.docs.first.reference.update({
-                                                      'totalWeeklyXP': FieldValue.increment(expGained),
+                                                      'totalWeeklyXP':
+                                                          FieldValue.increment(expGained),
                                                     });
                                                   }
-                                                },
+                                                }
+                                              } else {
+                                                await FirebaseFirestore.instance
+                                                    .collection('users')
+                                                    .doc(widget.studentID)
+                                                    .collection('tasks')
+                                                    .doc(doc.id)
+                                                    .update({
+                                                  'completedDates': isDone
+                                                      ? FieldValue.arrayRemove([
+                                                          selectedTargetKey,
+                                                        ])
+                                                      : FieldValue.arrayUnion([
+                                                          selectedTargetKey,
+                                                        ]),
+                                                });
+                                              }
+                                            },
+                                          ),
                                         ),
                                       ),
                                     );

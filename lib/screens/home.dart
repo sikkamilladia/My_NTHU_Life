@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/main.dart';
 import 'package:my_nthu_life/screens/profile.dart';
+import 'package:my_nthu_life/screens/ai_config_screen.dart';
 import 'package:my_nthu_life/screens/task_list_page.dart';
+import 'package:my_nthu_life/services/ai_service.dart';
 import 'package:my_nthu_life/widgets/pet_dashboard_widget.dart';
 import 'task_list_page.dart';
 import 'transcript.dart';
@@ -37,7 +39,7 @@ class _HomeState extends State<Home> {
     _pages = [
       _HomePage(studentID: widget.studentID),
       CreditPage(studentID: widget.studentID),
-      AIStudyMaterialWidget(),
+      AIStudyMaterialWidget(studentID: widget.studentID),
       TaskListPage(studentID: widget.studentID),
       PartyPage(studentID: widget.studentID),
     ];
@@ -55,7 +57,7 @@ class _HomeState extends State<Home> {
               backgroundColor: cs.surface,
               elevation: 0,
               title: Text(
-                "My NTHU Life",
+                "NTHYou",
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
@@ -101,7 +103,7 @@ class _HomeState extends State<Home> {
                         children: [
                           Text(
                             widget.studentID,
-                            style: GoogleFonts.outfit(
+                            style: GoogleFonts.orbitron(
                               fontWeight: FontWeight.bold,
                               fontSize: 18,
                             ),
@@ -126,7 +128,10 @@ class _HomeState extends State<Home> {
                 leading: const Icon(Icons.account_circle_outlined),
                 title: Text(
                   "Profile",
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w500),
+                  style: GoogleFonts.orbitron(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
@@ -136,6 +141,27 @@ class _HomeState extends State<Home> {
                     MaterialPageRoute(
                       builder: (context) =>
                           ProfileScreen(studentID: widget.studentID),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.psychology_outlined),
+                title: Text(
+                  "AI Config",
+                  style: GoogleFonts.orbitron(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          AIConfigScreen(studentID: widget.studentID),
                     ),
                   );
                 },
@@ -151,8 +177,11 @@ class _HomeState extends State<Home> {
                           : Icons.light_mode_rounded,
                     ),
                     title: Text(
-                      "Dark Mode",
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w500),
+                      "Theme Mode",
+                      style: GoogleFonts.orbitron(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
                     ),
                     trailing: Switch(
                       value: isDark,
@@ -173,7 +202,10 @@ class _HomeState extends State<Home> {
                 ),
                 title: Text(
                   "Global Rank",
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w500),
+                  style: GoogleFonts.orbitron(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(
@@ -370,8 +402,6 @@ class _HomePage extends StatelessWidget {
         children: [
           _HeroCard(studentID: studentID),
           const SizedBox(height: 14),
-          // _QuickStatsRow(studentID: studentID),
-          // const SizedBox(height: 20),
           ValueListenableBuilder<int>(
             valueListenable: totalCreditsNotifier,
             builder: (context, credits, child) {
@@ -660,6 +690,8 @@ class _TodayMissionsCard extends StatelessWidget {
 
   Color _getCategoryColor(String cat) {
     switch (cat) {
+      case 'Class':
+        return const Color(0xFFA594F9);
       case 'Homework':
         return const Color(0xFF9D4EDD);
       case 'Quiz':
@@ -706,7 +738,6 @@ class _TodayMissionsCard extends StatelessWidget {
               .collection('users')
               .doc(studentID)
               .collection('tasks')
-              .where('assignedDayString', isEqualTo: _todayKey)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -715,15 +746,54 @@ class _TodayMissionsCard extends StatelessWidget {
               );
             }
 
-            final docs = snapshot.data?.docs ?? [];
+            // final docs = snapshot.data?.docs ?? [];
+            final today = DateTime.now();
+            final todayWeekday = today.weekday; // 1=Mon, 7=Sun
+
+            final docs = (snapshot.data?.docs ?? []).where((doc) {
+              final data = doc.data();
+              final assignedDay = data['assignedDayString'] as String? ?? '';
+              final repeatType = data['repeatType'] as String? ?? 'None';
+              final repeatDays = List<int>.from(data['repeatDays'] ?? []);
+
+              if (repeatType == 'None') {
+                return assignedDay == _todayKey;
+              } else if (assignedDay.compareTo(_todayKey) > 0) {
+                return false; // hasn't started yet
+              } else if (repeatType == 'Daily') {
+                return true;
+              } else if (repeatType == 'Weekly') {
+                return repeatDays.contains(todayWeekday);
+              }
+              return false;
+            }).toList();
 
             // Show all tasks (including done), filter empty separately
-            final pendingDocs = docs
-                .where((d) => !(d.data()['isDone'] ?? false))
-                .toList();
-            final doneDocs = docs
-                .where((d) => d.data()['isDone'] ?? false)
-                .toList();
+            // final pendingDocs = docs
+            //     .where((d) => !(d.data()['isDone'] ?? false))
+            //     .toList();
+            // final doneDocs = docs
+            //     .where((d) => d.data()['isDone'] ?? false)
+            //     .toList();
+            final pendingDocs = docs.where((d) {
+              final data = d.data();
+              final repeatType = data['repeatType'] as String? ?? 'None';
+              if (repeatType == 'None') return !(data['isDone'] ?? false);
+              final completedDates = List<String>.from(
+                data['completedDates'] ?? [],
+              );
+              return !completedDates.contains(_todayKey);
+            }).toList();
+
+            final doneDocs = docs.where((d) {
+              final data = d.data();
+              final repeatType = data['repeatType'] as String? ?? 'None';
+              if (repeatType == 'None') return data['isDone'] ?? false;
+              final completedDates = List<String>.from(
+                data['completedDates'] ?? [],
+              );
+              return completedDates.contains(_todayKey);
+            }).toList();
 
             if (docs.isEmpty) {
               return Container(
@@ -815,44 +885,63 @@ class _TodayMissionsCard extends StatelessWidget {
             color: isDone ? Colors.greenAccent : cs.primaryContainer,
           ),
           // Matches task_list_page: disable button once done, no un-completing
-          onPressed: isDone
-              ? null
-              : () async {
-                  // Mark isDone: true first — same as task_list_page
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(studentID)
-                      .collection('tasks')
-                      .doc(doc.id)
-                      .update({'isDone': true});
+          onPressed: () async {
+            final data = doc.data();
+            final repeatType = data['repeatType'] as String? ?? 'None';
+            final ref = FirebaseFirestore.instance
+                .collection('users')
+                .doc(studentID)
+                .collection('tasks')
+                .doc(doc.id);
 
-                  // Award EXP + coins — guard against missing provider
-                  try {
-                    Provider.of<PetProvider>(
-                      context,
-                      listen: false,
-                    ).awardGrowthPoints(
-                      studentID: studentID,
-                      exp: expGained,
-                      coins: coinsGained,
-                    );
-                  } catch (_) {
-                    // Provider not in tree — write directly to Firestore instead
-                    final userRef = FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(studentID);
-                    final snap = await userRef.get();
-                    final petMap = snap.data()?['pet'] as Map<String, dynamic>?;
-                    if (petMap != null) {
-                      final currentCoins = (petMap['coins'] ?? 0) as int;
-                      final currentGP = (petMap['growthPoints'] ?? 0) as int;
-                      await userRef.update({
-                        'pet.coins': currentCoins + coinsGained,
-                        'pet.growthPoints': currentGP + expGained,
-                      });
-                    }
-                  }
-                },
+            if (isDone) {
+              // Uncheck
+              if (repeatType == 'None') {
+                await ref.update({'isDone': false});
+              } else {
+                await ref.update({
+                  'completedDates': FieldValue.arrayRemove([_todayKey]),
+                });
+              }
+              return; // skip XP award on uncheck
+            }
+
+            // Check (mark done)
+            if (repeatType == 'None') {
+              await ref.update({'isDone': true});
+            } else {
+              await ref.update({
+                'completedDates': FieldValue.arrayUnion([_todayKey]),
+              });
+            }
+
+            // Award EXP + coins — guard against missing provider
+            try {
+              Provider.of<PetProvider>(
+                context,
+                listen: false,
+              ).awardGrowthPoints(
+                studentID: studentID,
+                exp: expGained,
+                coins: coinsGained,
+              );
+            } catch (_) {
+              // Provider not in tree — write directly to Firestore instead
+              final userRef = FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(studentID);
+              final snap = await userRef.get();
+              final petMap = snap.data()?['pet'] as Map<String, dynamic>?;
+              if (petMap != null) {
+                final currentCoins = (petMap['coins'] ?? 0) as int;
+                final currentGP = (petMap['growthPoints'] ?? 0) as int;
+                await userRef.update({
+                  'pet.coins': currentCoins + coinsGained,
+                  'pet.growthPoints': currentGP + expGained,
+                });
+              }
+            }
+          },
         ),
       ),
     );
