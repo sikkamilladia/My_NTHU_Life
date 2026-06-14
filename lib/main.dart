@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/theme/theme.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart'; 
+import 'firebase_options.dart';
 
 var kColorScheme = MaterialTheme.lightScheme();
 var kDarkColorScheme = MaterialTheme.darkHighContrastScheme();
@@ -20,10 +20,10 @@ void main() async {
   // Ensure native bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  
+
   try {
     print("📡 [Firebase Test] Attempting connection initialization...");
-    
+
     // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -36,7 +36,6 @@ void main() async {
     print("📦 Connected Project ID: ${currentApp.options.projectId}");
     print("🔑 Application ID: ${currentApp.options.appId}");
     print("---------------------------------------------------------");
-
   } catch (e) {
     print("---------------------------------------------------------");
     print("❌ [Firebase ERROR] Failed to connect to backend!");
@@ -110,12 +109,8 @@ class MyApp extends StatelessWidget {
                   ),
                 ),
           ),
-          theme: ThemeData().copyWith(
+          theme: ThemeData.light().copyWith(
             colorScheme: kColorScheme,
-            appBarTheme: const AppBarTheme().copyWith(
-              backgroundColor: kColorScheme.onPrimaryContainer,
-              foregroundColor: kColorScheme.primaryContainer,
-            ),
             cardTheme: const CardThemeData().copyWith(
               color: kColorScheme.secondaryContainer,
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -123,44 +118,45 @@ class MyApp extends StatelessWidget {
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
                 backgroundColor: kColorScheme.primaryContainer,
+                foregroundColor: kColorScheme.onPrimaryContainer,
               ),
             ),
-            textTheme: GoogleFonts.outfitTextTheme(ThemeData().textTheme)
+            textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme)
                 .copyWith(
                   titleLarge: GoogleFonts.outfit(
                     fontSize: 40,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: kColorScheme.onSurface, // not hardcoded white
                     letterSpacing: -0.5,
                   ),
                   titleMedium: GoogleFonts.outfit(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: kColorScheme.onSurface,
                     letterSpacing: -0.5,
                   ),
                   titleSmall: GoogleFonts.outfit(
                     fontSize: 13,
-                    color: Colors.white60.withOpacity(0.55),
+                    color: kColorScheme.onSurfaceVariant,
                   ),
                   displayLarge: GoogleFonts.outfit(
                     fontSize: 25,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: kColorScheme.onSurface,
                   ),
                   bodyMedium: GoogleFonts.outfit(
                     fontSize: 14,
-                    color: Colors.white,
+                    color: kColorScheme.onSurface,
                   ),
                   labelMedium: GoogleFonts.outfit(
                     fontSize: 13,
-                    color: Colors.white38,
+                    color: kColorScheme.onSurfaceVariant,
                   ),
                   labelLarge: GoogleFonts.outfit(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.3,
-                    color: Colors.white,
+                    color: kColorScheme.onSurface,
                   ),
                 ),
           ),

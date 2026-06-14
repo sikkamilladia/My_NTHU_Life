@@ -228,7 +228,7 @@ class _PartyPageState extends State<PartyPage>
           'FORGE PARTY',
           style: GoogleFonts.orbitron(
             fontWeight: FontWeight.bold,
-            color: cs.primaryFixed, // #E0AAFF paleLavender
+            color: cs.inversePrimary, // #E0AAFF paleLavender
             fontSize: 16,
           ),
         ),
@@ -304,7 +304,7 @@ class _PartyPageState extends State<PartyPage>
           'JOIN PARTY',
           style: GoogleFonts.orbitron(
             fontWeight: FontWeight.bold,
-            color: cs.primaryFixed,
+            color: cs.inversePrimary,
             fontSize: 16,
           ),
         ),
@@ -548,7 +548,7 @@ class _PartyPageState extends State<PartyPage>
                   style: GoogleFonts.orbitron(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: cs.primaryFixed,
+                    color: cs.inversePrimary,
                     letterSpacing: 1.2, // #E0AAFF
                   ),
                 ),
@@ -835,7 +835,7 @@ class _PartyPageState extends State<PartyPage>
                     Text(
                       isSolo ? 'SOLO WEEKLY RANK' : 'PARTY WEEKLY RANK',
                       style: GoogleFonts.orbitron(
-                        color: cs.primaryFixed,
+                        color: cs.inversePrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -1107,7 +1107,7 @@ class _PartyPageState extends State<PartyPage>
                 Text(
                   title,
                   style: GoogleFonts.outfit(
-                    color: cs.primaryFixed, // #E0AAFF paleLavender
+                    color: cs.inversePrimary, // #E0AAFF paleLavender
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
