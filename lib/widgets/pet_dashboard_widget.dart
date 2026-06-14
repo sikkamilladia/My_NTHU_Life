@@ -267,8 +267,29 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Image.asset(
-                            _getPetAssetPath(_currentPet!.currentStage),
+                          // rendering pet image + equipped accessory overlay (pet hub)
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.asset(
+                                _getPetAssetPath(_currentPet!.currentStage),
+                              ),
+
+                              if (_currentPet!.equippedAccessory.isNotEmpty)
+                                Positioned(
+                                  top: _getAccessoryTop(
+                                    _currentPet!.equippedAccessory,
+                                  ),
+                                  child: Image.asset(
+                                    _getAccessoryAsset(
+                                      _currentPet!.equippedAccessory,
+                                    ),
+                                    width: 35,
+                                    height: 35,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -608,7 +629,9 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
 
                               if (pet.equippedAccessory.isNotEmpty)
                                 Positioned(
-                                  top: 0,
+                                  top: _getAccessoryTop(
+                                    _currentPet!.equippedAccessory,
+                                  ),
                                   child: Image.asset(
                                     _getAccessoryAsset(
                                       pet.equippedAccessory,
@@ -946,6 +969,25 @@ class _PetDashboardWidgetState extends State<PetDashboardWidget> {
 
       default:
         return '';
+    }
+  }
+
+  double _getAccessoryTop(String accessory) {
+    switch (accessory) {
+      case '👑 Golden Crown':
+        return -5;
+
+      case '🪄 Wizard Hat':
+        return -8;
+
+      case '👓 Cool Glasses':
+        return 12;
+
+      case '🎀 Pink Ribbon':
+        return -5;
+
+      default:
+        return 0;
     }
   }
 

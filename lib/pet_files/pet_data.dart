@@ -92,6 +92,9 @@ class StreakPet {
     while (growthPoints >= 100) {
       growthPoints -= 100;
       currentLevel += 1;
+
+      // bonus coins for leveling up
+      coins += currentLevel * 5;
     }
 
     // Evolution stages
