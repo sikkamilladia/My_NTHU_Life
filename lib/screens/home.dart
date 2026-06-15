@@ -1,22 +1,17 @@
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/pet_files/pet_provider.dart';
 import 'package:my_nthu_life/screens/party.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_nthu_life/main.dart';
 import 'package:my_nthu_life/screens/profile.dart';
 import 'package:my_nthu_life/screens/ai_config_screen.dart';
 import 'package:my_nthu_life/screens/task_list_page.dart';
-import 'package:my_nthu_life/services/ai_service.dart';
 import 'package:my_nthu_life/widgets/pet_dashboard_widget.dart';
 import 'package:my_nthu_life/services/firestore_services.dart';
-import 'task_list_page.dart';
 import 'transcript.dart';
 import 'study.dart';
-import 'gpa_calculator.dart';
 
 class Home extends StatefulWidget {
   final String studentID;
@@ -146,27 +141,27 @@ class _HomeState extends State<Home> {
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.psychology_outlined),
-                title: Text(
-                  "AI Config",
-                  style: GoogleFonts.orbitron(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          AIConfigScreen(studentID: widget.studentID),
-                    ),
-                  );
-                },
-              ),
+              // ListTile(
+              //   leading: const Icon(Icons.psychology_outlined),
+              //   title: Text(
+              //     "AI Config",
+              //     style: GoogleFonts.orbitron(
+              //       fontWeight: FontWeight.w500,
+              //       fontSize: 14,
+              //     ),
+              //   ),
+              //   trailing: const Icon(Icons.chevron_right_rounded),
+              //   onTap: () {
+              //     Navigator.pop(context);
+              //     Navigator.push(
+              //       context,
+              //       MaterialPageRoute(
+              //         builder: (context) =>
+              //             AIConfigScreen(studentID: widget.studentID),
+              //       ),
+              //     );
+              //   },
+              // ),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: themeNotifier,
                 builder: (context, currentMode, _) {
@@ -208,23 +203,45 @@ class _HomeState extends State<Home> {
                     fontSize: 14,
                   ),
                 ),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                trailing: StreamBuilder<int>(
+                  stream: FirestoreService().getUserRankStream(
+                    widget.studentID,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    "#12",
-                    style: GoogleFonts.outfit(
-                      color: Colors.amber.shade800,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Icon(
+                        Icons.error_outline,
+                        color: cs.error,
+                        size: 16,
+                      );
+                    }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      );
+                    }
+                    final rank = snapshot.data ?? 0;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        rank > 0 ? "#$rank" : "N/A",
+                        style: GoogleFonts.outfit(
+                          color: Colors.amber.shade800,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 onTap: () => Navigator.pop(context),
               ),
@@ -471,7 +488,9 @@ class _HomePageState extends State<_HomePage> {
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>?;
-        final requests = List<Map<String, dynamic>>.from(data?['requests'] ?? []);
+        final requests = List<Map<String, dynamic>>.from(
+          data?['requests'] ?? [],
+        );
 
         if (requests.isEmpty) {
           return Center(
@@ -623,42 +642,49 @@ class _HeroCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               // Global rank badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: cs.surfaceBright,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: cs.primaryContainer.withOpacity(0.4),
-                    width: 1.2,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      '#12',
-                      style: GoogleFonts.orbitron(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFFFFD700),
+              StreamBuilder<int>(
+                stream: FirestoreService().getUserRankStream(studentID),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Icon(Icons.error_outline, color: cs.error, size: 16);
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
+                  }
+                  final rank = snapshot.data ?? 0;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceBright,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: cs.primaryContainer.withOpacity(0.4),
+                        width: 1.2,
                       ),
                     ),
-                    // const SizedBox(width: 6),
-                    // Text(
-                    //   'GLOBAL',
-                    //   style: GoogleFonts.orbitron(
-                    //     fontSize: 8,
-                    //     color: cs.outline,
-                    //     letterSpacing: 1,
-                    //   ),
-                    // ),
-                  ],
-                ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          rank > 0 ? '#$rank' : 'N/A',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFFFD700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
           ),

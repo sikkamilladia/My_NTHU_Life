@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/services/ai_service.dart';
+import 'package:my_nthu_life/services/firestore_services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
@@ -15,6 +16,7 @@ class AIStudyMaterialWidget extends StatefulWidget {
 
 class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   final TextEditingController _controller = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
   List<Map<String, dynamic>> videos = [];
   List<Map<String, dynamic>> recommendedVideos = [];
   bool isLoading = false;
@@ -29,25 +31,55 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   bool studyStarted = false;
   bool studyFinished = false;
 
+  String? selectedCourse;
+  List<String> availableCourses = [];
+
   int studyMinutes = 25;
   int breakMinutes = 5;
   int totalSessions = 4;
 
-  int currentSession = 1; 
+  int currentSession = 1;
   int remainingSeconds = 1500;
 
   @override
   void initState() {
     super.initState();
     _fetchRecommendedVideos();
+    _fetchAvailableCourses();
+  }
+
+  Future<void> _fetchAvailableCourses() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .collection('tasks')
+          .where('category', isEqualTo: 'Class')
+          .get();
+
+      final courses = snapshot.docs
+          .map((doc) => doc.data()['course'] as String? ?? 'General')
+          .toSet()
+          .toList();
+
+      setState(() {
+        availableCourses = courses;
+        if (availableCourses.isNotEmpty && selectedCourse == null) {
+          selectedCourse = availableCourses.first;
+        }
+      });
+    } catch (e) {
+      print("Error fetching courses: $e");
+    }
   }
 
   Future<void> _fetchRecommendedVideos() async {
     try {
       setState(() => isRecommendedLoading = true);
       final now = DateTime.now();
-      final todayKey = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-      
+      final todayKey =
+          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
       final planDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.studentID)
@@ -58,17 +90,14 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       if (planDoc.exists) {
         final quests = planDoc.data()?['ai_quests'] as List? ?? [];
         if (quests.isNotEmpty) {
-          final query =
-              quests.map((q) => q['youtube_query']).join(" ");
+          final query = quests.map((q) => q['youtube_query']).join(" ");
 
-          final result =
-              await AIService.generateRoadmap(query);
+          final result = await AIService.generateRoadmap(query);
 
           setState(() {
-            recommendedVideos =
-                List<Map<String, dynamic>>.from(
-                  result["videos"] ?? [],
-                );
+            recommendedVideos = List<Map<String, dynamic>>.from(
+              result["videos"] ?? [],
+            );
           });
         }
       }
@@ -120,15 +149,25 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: cs.primaryContainer.withOpacity(0.3)),
+                    border: Border.all(
+                      color: cs.primaryContainer.withOpacity(0.3),
+                    ),
                   ),
                   child: Center(
                     child: Column(
                       children: [
-                        CircularProgressIndicator(color: cs.primaryContainer, strokeWidth: 2),
+                        CircularProgressIndicator(
+                          color: cs.primaryContainer,
+                          strokeWidth: 2,
+                        ),
                         const SizedBox(height: 12),
-                        Text("AI is preparing your tactical materials...", 
-                          style: GoogleFonts.orbitron(fontSize: 10, color: cs.primaryContainer)),
+                        Text(
+                          "AI is preparing your tactical materials...",
+                          style: GoogleFonts.orbitron(
+                            fontSize: 10,
+                            color: cs.primaryContainer,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -140,19 +179,29 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [cs.primaryContainer.withOpacity(0.15), cs.surfaceContainerLow],
+                      colors: [
+                        cs.primaryContainer.withOpacity(0.15),
+                        cs.surfaceContainerLow,
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: cs.primaryContainer.withOpacity(0.5), width: 1.5),
+                    border: Border.all(
+                      color: cs.primaryContainer.withOpacity(0.5),
+                      width: 1.5,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.auto_awesome_rounded, color: cs.primaryContainer, size: 18),
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            color: cs.primaryContainer,
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             "RECOMMENDED FOR YOUR PLAN",
@@ -166,49 +215,128 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      ...recommendedVideos.take(2).map((v) => _buildVideoItem(cs, v)).toList(),
+                      ...recommendedVideos
+                          .take(2)
+                          .map((v) => _buildVideoItem(cs, v))
+                          .toList(),
                     ],
                   ),
                 ),
 
-              // --- 1. HEADER ---
-              // Row(
-              //   children: [
-              //     Icon(
-              //       Icons.auto_awesome_rounded,
-              //       color: cs.primaryContainer,
-              //       size: 28,
-              //     ),
-              //     const SizedBox(width: 8),
-              //     Text(
-              //       "STUDY HQ",
-              //       style: GoogleFonts.orbitron(
-              //         fontSize: 18,
-              //         fontWeight: FontWeight.bold,
-              //         color: cs.onSurface,
-              //         letterSpacing: 1.2,
-              //       ),
-              //     ),
-              //     const Spacer(),
-              //     Container(
-              //       padding: const EdgeInsets.all(6),
-              //       decoration: BoxDecoration(
-              //         border: Border.all(color: cs.outlineVariant),
-              //         borderRadius: BorderRadius.circular(8),
-              //       ),
-              //       child: Icon(Icons.history, color: cs.onSurface, size: 20),
-              //     ),
-              //   ],
-              // ),
-              // const SizedBox(height: 4),
-              // Text(
-              //   "Deploy your AI companion to master any subject.",
-              //   style: GoogleFonts.outfit(
-              //     fontSize: 13,
-              //     color: cs.onSurfaceVariant,
-              //   ),
-              // ),
-              // const SizedBox(height: 20),
+              // --- 1. CLASS SELECTION ---
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: cs.outlineVariant, width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            color: cs.primaryContainer,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "CHOOSE YOUR TARGET CLASS",
+                            style: GoogleFonts.orbitron(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: cs.primaryContainer,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (availableCourses.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          "No active classes found in your calendar.",
+                          style: GoogleFonts.outfit(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        height: 40,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: availableCourses.length,
+                          itemBuilder: (context, index) {
+                            final course = availableCourses[index];
+                            final isSelected = selectedCourse == course;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  selectedCourse = course;
+                                });
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? cs.primaryContainer
+                                      : cs.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? cs.primaryContainer
+                                        : cs.outlineVariant,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: cs.primaryContainer
+                                                .withOpacity(0.3),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  course,
+                                  style: GoogleFonts.outfit(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : cs.onSurface,
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
 
               // --- 2. AI COMPANION CARD ---
               Container(
@@ -242,7 +370,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Hi There!",
+                                "MISSION PARAMETERS",
                                 style: GoogleFonts.orbitron(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -251,7 +379,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                "Input a subject node to begin\nyour learning sequence.",
+                                "Define the topic for ${selectedCourse ?? 'your class'}.",
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
                                   color: cs.onSurfaceVariant,
@@ -267,7 +395,8 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                       controller: _controller,
                       style: GoogleFonts.outfit(color: cs.onSurface),
                       decoration: InputDecoration(
-                        hintText: "e.g. Explain photosynthesis in simple terms",
+                        hintText:
+                            "e.g. Core concepts of ${selectedCourse ?? 'this class'}",
                         hintStyle: GoogleFonts.outfit(
                           color: cs.onSurfaceVariant.withOpacity(0.6),
                           fontSize: 13,
@@ -284,7 +413,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                             ),
                             padding: const EdgeInsets.all(6),
                             child: const Icon(
-                              Icons.arrow_upward_rounded,
+                              Icons.movie_creation_outlined,
                               color: Colors.white,
                               size: 18,
                             ),
@@ -312,34 +441,35 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                     // Action chips — gamified labels
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildActionChip(
-                            cs,
-                            Icons.menu_book_outlined,
-                            "Decode Topic",
-                            onTap: _explainTopic,
-                          ),
-                          _buildActionChip(
-                            cs,
-                            Icons.description_outlined,
-                            "Summarize",
-                            onTap: _summarizeNotes,
-                          ),
-                          _buildActionChip(
-                            cs,
-                            Icons.play_circle_outline_rounded,
-                            "Video Recon",
-                          ),
-                          _buildActionChip(
-                            cs,
-                            Icons.quiz_outlined,
-                            "Run Trial",
-                            onTap: _generateQuiz,
-                          ),
-                          _buildActionChip(cs, Icons.more_horiz, "More"),
-                        ],
-                      ),
+                      // child: Row(
+                      //   children: [
+                      //     _buildActionChip(
+                      //       cs,
+                      //       Icons.menu_book_outlined,
+                      //       "Decode Topic",
+                      //       onTap: _explainTopic,
+                      //     ),
+                      //     _buildActionChip(
+                      //       cs,
+                      //       Icons.description_outlined,
+                      //       "Summarize",
+                      //       onTap: _summarizeNotes,
+                      //     ),
+                      //     _buildActionChip(
+                      //       cs,
+                      //       Icons.play_circle_outline_rounded,
+                      //       "Generate Video",
+                      //       onTap: _searchVideos,
+                      //     ),
+                      //     _buildActionChip(
+                      //       cs,
+                      //       Icons.quiz_outlined,
+                      //       "Run Trial",
+                      //       onTap: _generateQuiz,
+                      //     ),
+                      //     _buildActionChip(cs, Icons.more_horiz, "More"),
+                      //   ],
+                      // ),
                     ),
                   ],
                 ),
@@ -410,7 +540,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          "VIDEO RECON FEED",
+                          "GENERATED VIDEO RECON",
                           style: GoogleFonts.orbitron(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -422,7 +552,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Curated transmissions for your subject node",
+                      "AI-curated transmissions based on your topic",
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         color: cs.onSurfaceVariant,
@@ -437,11 +567,12 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                       )
                     else if (!hasSearched)
                       Text(
-                        "Input a subject node to receive video intelligence.",
-                        style: GoogleFonts.outfit(color: cs.onSurfaceVariant),
+                        "Input a topic and class to generate video intelligence.",
+                        style: GoogleFonts.outfit(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
                       )
-                    else if(isLoading)
-                      const Center(child: CircularProgressIndicator())
                     else if (videos.isEmpty)
                       Text(
                         "No signals detected. Try another query.",
@@ -450,47 +581,144 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                     else
                       Column(
                         children: videos
-                            .map((v) => _buildVideoItem(cs, v))
+                            .map((v) => _buildVideoItem(cs, v, showSave: true))
                             .toList(),
                       ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton(
-                        onPressed: _openYouTubeSearch,
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: cs.outline),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "SEE MORE ON YOUTUBE ",
-                              style: GoogleFonts.orbitron(
-                                color: cs.primaryContainer,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Icon(
-                              Icons.launch_rounded,
-                              size: 13,
-                              color: cs.primaryContainer,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
-              // --- 5. INTEL BANNER ---
+              // --- 5. SAVED VIDEOS SECTION ---
+              StreamBuilder<QuerySnapshot>(
+                stream: _firestoreService.getSavedVideos(
+                  widget.studentID,
+                  selectedCourse,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        "Error loading videos: ${snapshot.error}",
+                        style: TextStyle(color: cs.error),
+                      ),
+                    );
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: cs.outlineVariant,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.bookmark_border_rounded,
+                                color: cs.primaryContainer,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                "SAVED VIDEOS (${selectedCourse ?? 'NONE'})",
+                                style: GoogleFonts.orbitron(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: cs.onSurface,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            "No transmissions saved for this sector yet.",
+                            style: GoogleFonts.outfit(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final savedVideos = snapshot.data!.docs.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    data['docId'] = doc.id;
+                    return data;
+                  }).toList();
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: cs.primaryContainer.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.bookmark_rounded,
+                              color: cs.primaryContainer,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "SAVED INTELLIGENCE (${selectedCourse ?? 'GENERAL'})",
+                                style: GoogleFonts.orbitron(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: cs.onSurface,
+                                  letterSpacing: 1,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ...savedVideos
+                            .map(
+                              (v) => _buildVideoItem(
+                                cs,
+                                v,
+                                isSaved: true,
+                                docId: v['docId'],
+                              ),
+                            )
+                            .toList(),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
+              // --- 6. INTEL BANNER ---
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -534,7 +762,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            "Use video recon to decode concepts visually and reinforce your knowledge matrix.",
+                            "Save key transmissions to build your permanent knowledge matrix.",
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               color: cs.onSurfaceVariant,
@@ -594,97 +822,21 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       ),
     );
   }
-  Widget _buildVideoPlaceholderItem(Color mutedColor, Color borderPurple) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 120,
-          height: 70,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D2636),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(Icons.play_arrow_rounded, color: mutedColor, size: 28),
-              Positioned(
-                bottom: 4,
-                right: 4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    "10:00",
-                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 9),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Container(
-                width: double.infinity,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D2636),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                width: 80,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D2636),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    width: 24,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D2636),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Text(
-                    "  •  123K views  •  2 years ago",
-                    style: GoogleFonts.outfit(
-                      fontSize: 10,
-                      color: mutedColor.withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Icon(Icons.more_vert_rounded, size: 18, color: mutedColor),
-      ],
-    );
-  }
 
-  Widget _buildVideoItem(ColorScheme cs, Map<String, dynamic> video) {
+  Widget _buildVideoItem(
+    ColorScheme cs,
+    Map<String, dynamic> video, {
+    bool showSave = false,
+    bool isSaved = false,
+    String? docId,
+  }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(vertical: 6),
       onTap: () {
         final url = video["url"]?.toString();
-        final fallbackQuery =
-            video["youtubeKeywords"]?.first ?? video["title"] ?? "";
+        final fallbackQuery = video["youtubeKeywords"]?.isNotEmpty == true
+            ? video["youtubeKeywords"].first
+            : (video["title"] ?? "");
         final finalUrl = (url != null && url.isNotEmpty)
             ? url
             : "https://www.youtube.com/results?search_query=${Uri.encodeComponent(fallbackQuery)}";
@@ -728,6 +880,8 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       ),
       title: Text(
         video["title"] ?? "No title",
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
         style: GoogleFonts.outfit(
           color: cs.onSurface,
           fontWeight: FontWeight.w600,
@@ -738,6 +892,35 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
         video["channel"] ?? "Unknown channel",
         style: GoogleFonts.outfit(color: cs.onSurfaceVariant, fontSize: 11),
       ),
+      trailing: isSaved
+          ? IconButton(
+              icon: Icon(Icons.delete_outline, color: cs.error, size: 20),
+              onPressed: () =>
+                  _firestoreService.deleteSavedVideo(widget.studentID, docId!),
+            )
+          : showSave
+          ? IconButton(
+              icon: Icon(
+                Icons.bookmark_border,
+                color: cs.primaryContainer,
+                size: 20,
+              ),
+              onPressed: () {
+                _firestoreService.saveStudyVideo(
+                  widget.studentID,
+                  video,
+                  selectedCourse ?? 'General',
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      "Transmission saved to ${selectedCourse ?? 'General'} matrix.",
+                    ),
+                  ),
+                );
+              },
+            )
+          : null,
     );
   }
 
@@ -746,26 +929,27 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   Future<void> _searchVideos() async {
     try {
       final topic = _controller.text.trim();
-      if (topic.isEmpty) return;
+      if (topic.isEmpty && selectedCourse == null) return;
+
       setState(() {
         isLoading = true;
         hasSearched = true;
       });
 
-      final result = await AIService.generateRoadmap(topic);
-      print(result);
+      final query = "${selectedCourse ?? ''} $topic".trim();
+      final result = await AIService.generateRoadmap(query);
+
       setState(() {
         videos = List<Map<String, dynamic>>.from(result["videos"] ?? []);
         isLoading = false;
       });
     } catch (e) {
-    print("ERROR: $e");
-
-    setState(() {
-      isLoading = false;
-    });
+      print("ERROR: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
-}
 
   Future<void> _openYouTubeSearch() async {
     final topic = _controller.text.trim();
@@ -784,8 +968,8 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       if (text.isEmpty || isSummarizing) return;
       setState(() => isSummarizing = true);
       final result = await AIService.summarizeNotes(text);
-      final summary = result["summary"]?.toString()?? "";
-      if (summary == null || summary.isEmpty) {
+      final summary = result["summary"]?.toString() ?? "";
+      if (summary.isEmpty) {
         setState(() => isSummarizing = false);
         return;
       }
@@ -962,7 +1146,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
 
       final result = await AIService.explainTopic(topic);
 
-      final explanation = result["explanation"]?.toString()?? "";
+      final explanation = result["explanation"]?.toString() ?? "";
 
       setState(() {
         explanationResult = explanation;
@@ -971,7 +1155,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
 
       if (!mounted) return;
       _showExplanationBottomSheet();
-
     } catch (e) {
       print("EXPLAIN ERROR: $e");
       setState(() {
@@ -979,7 +1162,8 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       });
     }
   }
-    void _showExplanationBottomSheet() {
+
+  void _showExplanationBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1005,6 +1189,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
     );
   }
 }
+
 // ── YouTube Player Screen ──────────────────────────────────────────────────────
 
 class YoutubePlayerScreen extends StatefulWidget {
