@@ -78,6 +78,7 @@ flutter:
     - assets/pet/juvenile.png
     - assets/pet/adult.png
     - assets/badge/
+    - assets/accessories/
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
