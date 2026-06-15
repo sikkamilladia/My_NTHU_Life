@@ -314,15 +314,17 @@ class FirestoreService {
       });
       
       // 2. Remove from sender's requests_sent
-      final senderUid = request['fromUid'];
-      final senderDoc = await _firestore.collection('users').doc(senderUid).get();
-      if (senderDoc.exists) {
-        final sent = List<Map<String, dynamic>>.from(senderDoc.data()?['requests_sent'] ?? []);
-        final toRemove = sent.where((r) => r['toUid'] == uid && r['type'] == request['type']).toList();
-        if (toRemove.isNotEmpty) {
-          await _firestore.collection('users').doc(senderUid).update({
-            'requests_sent': FieldValue.arrayRemove(toRemove),
-          });
+      final senderUid = request['fromUid'] as String?;
+      if (senderUid != null) {
+        final senderDoc = await _firestore.collection('users').doc(senderUid).get();
+        if (senderDoc.exists) {
+          final sent = List<Map<String, dynamic>>.from(senderDoc.data()?['requests_sent'] ?? []);
+          final toRemove = sent.where((r) => r['toUid'] == uid && r['type'] == request['type']).toList();
+          if (toRemove.isNotEmpty) {
+            await _firestore.collection('users').doc(senderUid).update({
+              'requests_sent': FieldValue.arrayRemove(toRemove),
+            });
+          }
         }
       }
 
@@ -406,6 +408,50 @@ class FirestoreService {
     } catch (e) {
       print("Join Party Error: $e");
       return false;
+    }
+  }
+
+  Future<void> saveStudyVideo(String uid, Map<String, dynamic> video, String course) async {
+    try {
+      final videoId = video['url'] != null ? video['url'].hashCode.toString() : DateTime.now().millisecondsSinceEpoch.toString();
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_videos')
+          .doc(videoId)
+          .set({
+        ...video,
+        'course': course,
+        'savedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print("Save Study Video Error: $e");
+    }
+  }
+
+  Stream<QuerySnapshot> getSavedVideos(String uid, String? course) {
+    Query query = _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('saved_videos');
+    
+    if (course != null) {
+      query = query.where('course', isEqualTo: course);
+    }
+    
+    return query.snapshots();
+  }
+
+  Future<void> deleteSavedVideo(String uid, String videoId) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_videos')
+          .doc(videoId)
+          .delete();
+    } catch (e) {
+      print("Delete Saved Video Error: $e");
     }
   }
 }
