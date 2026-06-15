@@ -1,12 +1,20 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/services/ai_service.dart';
 import 'package:my_nthu_life/services/firestore_services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:my_nthu_life/pet_files/pet_provider.dart';
+import 'package:file_picker/file_picker.dart';
+
 
 class AIStudyMaterialWidget extends StatefulWidget {
   final String studentID;
@@ -34,8 +42,23 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   String? selectedCourse;
   List<String> availableCourses = [];
 
+  // --- AI Material Cognition State ---
+  Map<String, dynamic>? _analyzedMaterial;
+  bool _isMaterialLoading = false;
+  String? _pickedFileName;
+
+  // --- Material Quiz State ---
+  bool _isTakingQuiz = false;
+  int _currentQuestionIndex = 0;
+  int _quizScore = 0;
+  List<String> _selectedAnswers = [];
+  String? _selectedOptionInCurrentQuestion;
+  bool _hasAnsweredCurrentQuestion = false;
+
   // --- Pomodoro State Variables ---
   bool _showTimerSetup = true;
+  bool _showFileUploadStep = false;
+  bool _shouldStartTimerOnLoad = false;
   int _selectedMinutes = 25;
   int _remainingSeconds = 1500;
   bool _isTimerRunning = false;
@@ -53,6 +76,283 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
     _timer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  // --- AI Material Helper Methods ---
+  Future<void> _loadMaterialForSelectedCourse() async {
+    if (selectedCourse == null) return;
+    setState(() {
+      _isMaterialLoading = true;
+      _analyzedMaterial = null;
+      _pickedFileName = null;
+    });
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .collection('study_materials')
+          .where('courseName', isEqualTo: selectedCourse)
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final data = query.docs.first.data();
+        setState(() {
+          _analyzedMaterial = data['analysis'];
+          _pickedFileName = data['fileName'];
+        });
+      }
+    } catch (e) {
+      print("Error loading study material: $e");
+    } finally {
+      setState(() {
+        _isMaterialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _pickAndAnalyzeMaterial() async {
+    if (selectedCourse == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please select a target class first!"),
+          backgroundColor: Colors.amber,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'ppt', 'pptx'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      setState(() {
+        _isMaterialLoading = true;
+        _pickedFileName = result.files.single.name;
+        _analyzedMaterial = null;
+      });
+
+      final file = result.files.single;
+      final fileName = file.name;
+      final fileExtension = file.extension ?? '';
+      final Uint8List? fileBytes = file.bytes;
+
+      Uint8List? finalBytes = fileBytes;
+      if (finalBytes == null && file.path != null) {
+        finalBytes = await File(file.path!).readAsBytes();
+      }
+
+      final analysis = await AIService.analyzeStudyMaterial(
+        fileName: fileName,
+        fileType: fileExtension,
+        fileBytes: finalBytes,
+        courseName: selectedCourse!,
+      );
+
+      if (analysis.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.studentID)
+            .collection('study_materials')
+            .add({
+              'fileName': fileName,
+              'fileType': fileExtension,
+              'courseName': selectedCourse,
+              'analysis': analysis,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
+        setState(() {
+          _analyzedMaterial = analysis;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Material analyzed and saved successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        if (_showFileUploadStep) {
+          Future.delayed(const Duration(milliseconds: 600), () {
+            _proceedToStudyHQ();
+          });
+        }
+      } else {
+        setState(() {
+          _pickedFileName = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to analyze study material. Please try again."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print("Error picking/analyzing file: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isMaterialLoading = false;
+      });
+    }
+  }
+
+  DateTime _getNextWeekdayDate(String dayName) {
+    final now = DateTime.now();
+    final Map<String, int> weekdays = {
+      'monday': DateTime.monday,
+      'tuesday': DateTime.tuesday,
+      'wednesday': DateTime.wednesday,
+      'thursday': DateTime.thursday,
+      'friday': DateTime.friday,
+      'saturday': DateTime.saturday,
+      'sunday': DateTime.sunday,
+    };
+
+    final targetWeekday = weekdays[dayName.toLowerCase()] ?? DateTime.monday;
+    int daysToAdd = targetWeekday - now.weekday;
+    if (daysToAdd < 0) {
+      daysToAdd += 7;
+    }
+    return now.add(Duration(days: daysToAdd));
+  }
+
+  String _formatDateString(DateTime date) {
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  }
+
+  Future<void> _addScheduledTaskToPlanner(Map<String, dynamic> session) async {
+    if (selectedCourse == null) return;
+
+    try {
+      final dayName = session['day'] as String? ?? 'Monday';
+      final topic = session['topic'] as String? ?? 'Study Topic';
+      final targetDate = _getNextWeekdayDate(dayName);
+      final dateStr = _formatDateString(targetDate);
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .collection('tasks')
+          .add({
+            'title': "Study: $topic [AI Pomodoro]",
+            'course': selectedCourse,
+            'category': 'Homework',
+            'assignedDayString': dateStr,
+            'repeatType': 'None',
+            'repeatDays': [],
+            'exp': 10,
+            'coins': 5,
+            'isDone': false,
+            'completedDates': [],
+            'subtasks': [
+              {
+                'title': 'Read & Summarize Material',
+                'estimated_minutes': 15,
+                'isDone': false,
+                'completedDates': [],
+              },
+              {
+                'title': 'Complete focus pomodoro session',
+                'estimated_minutes': 25,
+                'isDone': false,
+                'completedDates': [],
+              },
+              {
+                'title': 'Take Post-Pomodoro Quiz',
+                'estimated_minutes': 10,
+                'isDone': false,
+                'completedDates': [],
+              }
+            ],
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Scheduled study for $topic on $dayName added to your planner!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print("Error adding scheduled task: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to schedule: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _startMaterialQuiz() {
+    setState(() {
+      _isTakingQuiz = true;
+      _currentQuestionIndex = 0;
+      _quizScore = 0;
+      _selectedAnswers = List.generate(10, (index) => "");
+      _selectedOptionInCurrentQuestion = null;
+      _hasAnsweredCurrentQuestion = false;
+    });
+  }
+
+  void _deleteMaterial() async {
+    if (selectedCourse == null) return;
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF13101B),
+        title: Text("DELETE MATERIAL?", style: GoogleFonts.orbitron(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Text("Are you sure you want to delete the analyzed material and quiz for this course?", style: GoogleFonts.outfit(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        setState(() => _isMaterialLoading = true);
+        final query = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.studentID)
+            .collection('study_materials')
+            .where('courseName', isEqualTo: selectedCourse)
+            .get();
+
+        for (var doc in query.docs) {
+          await doc.reference.delete();
+        }
+
+        setState(() {
+          _analyzedMaterial = null;
+          _pickedFileName = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Material deleted successfully!"), backgroundColor: Colors.green),
+        );
+      } catch (e) {
+        print("Error deleting material: $e");
+      } finally {
+        setState(() => _isMaterialLoading = false);
+      }
+    }
   }
 
   void _startTimer() {
@@ -90,7 +390,140 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
     });
   }
 
+  void _showSetTimerDialog() {
+    _pauseTimer();
+    int tempMinutes = _selectedMinutes;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF13101B), // dark background
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.greenAccent, width: 1.5),
+              ),
+              title: Center(
+                child: Text(
+                  "ADJUST TIMER",
+                  style: GoogleFonts.orbitron(
+                    color: Colors.greenAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Set new focus duration or return to the main setup screen.",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    "$tempMinutes MINUTES",
+                    style: GoogleFonts.orbitron(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Slider(
+                    value: tempMinutes.toDouble(),
+                    min: 1,
+                    max: 60,
+                    divisions: 59,
+                    activeColor: Colors.greenAccent,
+                    inactiveColor: Colors.white10,
+                    label: "$tempMinutes",
+                    onChanged: (val) {
+                      setDialogState(() {
+                        tempMinutes = val.round();
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actionsOverflowButtonSpacing: 8,
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(
+                    "CANCEL",
+                    style: GoogleFonts.orbitron(
+                      color: Colors.white54,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.greenAccent,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _selectedMinutes = tempMinutes;
+                      _remainingSeconds = tempMinutes * 60;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(
+                    "APPLY",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.greenAccent,
+                    side: const BorderSide(color: Colors.greenAccent, width: 1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _showTimerSetup = true;
+                    });
+                  },
+                  child: Text(
+                    "OPEN DIAL SETUP",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showCompletionDialog() {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -160,35 +593,73 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
               ),
             ],
           ),
+          actionsAlignment: MainAxisAlignment.center,
           actions: [
-            Center(
-              child: SizedBox(
-                width: 160,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.greenAccent,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_analyzedMaterial != null && _analyzedMaterial!['quiz'] != null) ...[
+                  SizedBox(
+                    width: 220,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.quiz_rounded, size: 16),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: cs.primaryContainer,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        setState(() {
+                          _showTimerSetup = false;
+                          _remainingSeconds = _selectedMinutes * 60;
+                        });
+                        _startMaterialQuiz();
+                      },
+                      label: Text(
+                        "TAKE MATERIAL QUIZ",
+                        style: GoogleFonts.orbitron(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 1,
+                        ),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    setState(() {
-                      _showTimerSetup = true;
-                      _remainingSeconds = _selectedMinutes * 60;
-                    });
-                  },
-                  child: Text(
-                    "CULTIVATE MORE",
-                    style: GoogleFonts.orbitron(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  width: 220,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.greenAccent,
+                      side: const BorderSide(color: Colors.greenAccent, width: 1.5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      setState(() {
+                        _showTimerSetup = true;
+                        _remainingSeconds = _selectedMinutes * 60;
+                      });
+                    },
+                    child: Text(
+                      "CULTIVATE MORE",
+                      style: GoogleFonts.orbitron(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ],
         );
@@ -216,6 +687,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
           selectedCourse = availableCourses.first;
         }
       });
+      _loadMaterialForSelectedCourse();
     } catch (e) {
       print("Error fetching courses: $e");
     }
@@ -268,6 +740,14 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
 
     if (_showTimerSetup) {
       return _buildTimerSetupView(cs);
+    }
+
+    if (_showFileUploadStep) {
+      return _buildFileUploadStepView(cs);
+    }
+
+    if (_isTakingQuiz) {
+      return _buildQuizView(cs);
     }
 
     return Scaffold(
@@ -438,6 +918,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                                 setState(() {
                                   selectedCourse = course;
                                 });
+                                _loadMaterialForSelectedCourse();
                               },
                               child: Container(
                                 margin: const EdgeInsets.symmetric(
@@ -490,6 +971,11 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // --- AI MATERIAL COGNITION CARD ---
+              _buildMaterialCognitionCard(cs),
+              const SizedBox(height: 20),
 
               // --- 2. AI COMPANION CARD ---
               Container(
@@ -1419,8 +1905,9 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   onPressed: () {
                     setState(() {
                       _showTimerSetup = false;
+                      _showFileUploadStep = true;
+                      _shouldStartTimerOnLoad = true;
                     });
-                    _startTimer();
                   },
                   icon: const Icon(Icons.forest_rounded, size: 20),
                   label: Text(
@@ -1450,6 +1937,8 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   onPressed: () {
                     setState(() {
                       _showTimerSetup = false;
+                      _showFileUploadStep = true;
+                      _shouldStartTimerOnLoad = false;
                       _remainingSeconds = _selectedMinutes * 60;
                     });
                   },
@@ -1476,6 +1965,408 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _proceedToStudyHQ() {
+    setState(() {
+      _showFileUploadStep = false;
+    });
+    if (_shouldStartTimerOnLoad) {
+      _startTimer();
+      _shouldStartTimerOnLoad = false;
+    }
+  }
+
+  Widget _buildFileUploadStepView(ColorScheme cs) {
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        backgroundColor: cs.surface,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        title: Text(
+          "COGNITIVE TRANSLATION PORT",
+          style: GoogleFonts.orbitron(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+            letterSpacing: 1.5,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 10),
+              Center(
+                child: Icon(
+                  Icons.cloud_upload_outlined,
+                  color: cs.primaryContainer,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  "SYNCHRONIZE COGNITIVE CORE",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                    letterSpacing: 1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  "Load your class syllabus, lecture slides, or PDF materials to feed Gemini's core before starting.",
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 36),
+
+              // Target Class Selector (Mandatory for analysis)
+              Text(
+                "SELECT TARGET CLASS",
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: cs.primaryContainer,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (availableCourses.isEmpty)
+                Text(
+                  "No active classes found in your calendar. Defaulting to General study.",
+                  style: GoogleFonts.outfit(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 40,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: availableCourses.length,
+                    itemBuilder: (context, index) {
+                      final course = availableCourses[index];
+                      final isSelected = selectedCourse == course;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedCourse = course;
+                          });
+                          _loadMaterialForSelectedCourse();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? cs.primaryContainer
+                                : cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? cs.primaryContainer
+                                  : cs.outlineVariant,
+                              width: 1.5,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            course,
+                            style: GoogleFonts.outfit(
+                              color: isSelected ? Colors.white : cs.onSurface,
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 32),
+
+              // Upload Area Card (similar to cognition card)
+              _buildUploadAreaCard(cs),
+
+              const SizedBox(height: 48),
+
+              // Bottom Actions
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _proceedToStudyHQ,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: cs.onSurface,
+                        side: BorderSide(color: cs.outlineVariant, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Text(
+                        "SKIP UPLOAD",
+                        style: GoogleFonts.orbitron(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_analyzedMaterial != null) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _proceedToStudyHQ,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.greenAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 3,
+                        ),
+                        child: Text(
+                          "PROCEED",
+                          style: GoogleFonts.orbitron(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUploadAreaCard(ColorScheme cs) {
+    if (selectedCourse == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant, width: 1.5),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.lock_outline_rounded, color: cs.onSurfaceVariant, size: 36),
+            const SizedBox(height: 12),
+            Text(
+              "SELECT A TARGET CLASS FIRST",
+              style: GoogleFonts.orbitron(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Please choose one of your active classes above to unlock upload capabilities.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_isMaterialLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.primaryContainer.withOpacity(0.5), width: 1.5),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              CircularProgressIndicator(color: cs.primaryContainer, strokeWidth: 2.5),
+              const SizedBox(height: 20),
+              Text(
+                "CONNECTING TO COGNITIVE CORE...",
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: cs.primaryContainer,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Gemini is analyzing PDF/PPT text, extracting topics, summarizing context, and generating questions...",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_analyzedMaterial == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant, width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "MATERIAL COGNITION UPLOAD",
+              style: GoogleFonts.orbitron(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: cs.primaryContainer,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Supports PDF, PPT, PPTX formats up to 10MB.",
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: GestureDetector(
+                onTap: _pickAndAnalyzeMaterial,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: cs.primaryContainer.withOpacity(0.3),
+                      width: 1.5,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.cloud_upload_outlined, color: cs.primaryContainer, size: 44),
+                      const SizedBox(height: 12),
+                      Text(
+                        "CHOOSE PDF / PPT FILE",
+                        style: GoogleFonts.orbitron(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: cs.primaryContainer,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Tap to browse system files",
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // If already analyzed
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.5), width: 1.5),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent, size: 48),
+          const SizedBox(height: 16),
+          Text(
+            "TRANSMISSION SYNCHRONIZED!",
+            style: GoogleFonts.orbitron(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.greenAccent,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _pickedFileName ?? "SUCCESSFULLY LOADED",
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Gemini has finished decoding the core concepts and is ready to assist you in Study HQ.",
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              color: cs.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -1559,13 +2450,31 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}",
-                  style: GoogleFonts.orbitron(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.5,
+                InkWell(
+                  onTap: _showSetTimerDialog,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}",
+                          style: GoogleFonts.orbitron(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.edit_outlined,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1624,6 +2533,857 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // --- AI Material Cognition and Interactive Quiz UI Builders ---
+
+  Widget _buildMaterialCognitionCard(ColorScheme cs) {
+    if (selectedCourse == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant, width: 1.5),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.lock_outline_rounded, color: cs.onSurfaceVariant, size: 36),
+            const SizedBox(height: 12),
+            Text(
+              "SELECT A TARGET CLASS",
+              style: GoogleFonts.orbitron(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "To unlock AI Material Cognition, please choose one of your active classes above.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_isMaterialLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.primaryContainer.withOpacity(0.5), width: 1.5),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              CircularProgressIndicator(color: cs.primaryContainer, strokeWidth: 2.5),
+              const SizedBox(height: 20),
+              Text(
+                "CONNECTING TO COGNITIVE CORE...",
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: cs.primaryContainer,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Gemini is analyzing PDF/PPT text, extracting topics, summarizing context, and generating questions...",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_analyzedMaterial == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant, width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.rocket_launch_outlined, color: cs.primaryContainer, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  "AI MATERIAL COGNITION",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: cs.primaryContainer,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Upload lecture slides or PDFs (PPT/PDF). Gemini will dissect key topics, compile brief summaries, estimate study duration, design an automatic Pomodoro calendar schedule, and prepare a custom 10-question focus quiz!",
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: GestureDetector(
+                onTap: _pickAndAnalyzeMaterial,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: cs.primaryContainer.withOpacity(0.3),
+                      width: 1.5,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.cloud_upload_outlined, color: cs.primaryContainer, size: 40),
+                      const SizedBox(height: 12),
+                      Text(
+                        "SELECT PDF / PPT COGNITIVE TRANSCEIVER",
+                        style: GoogleFonts.orbitron(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: cs.primaryContainer,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Supports PDF, PPT, PPTX formats up to 10MB",
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final topics = List<String>.from(_analyzedMaterial!['important_topics'] ?? []);
+    final summary = _analyzedMaterial!['summary'] as String? ?? 'No summary generated.';
+    final estTime = _analyzedMaterial!['estimated_study_time_minutes'] as int? ?? 60;
+    final schedule = _analyzedMaterial!['pomodoro_schedule'] as List? ?? [];
+    final videoRecon = _analyzedMaterial!['videos'] as List? ?? [];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.primaryContainer.withOpacity(0.5), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.task_rounded, color: cs.primaryContainer, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _pickedFileName?.toUpperCase() ?? "ANALYZED MATERIAL",
+                        style: GoogleFonts.orbitron(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: cs.primaryContainer,
+                          letterSpacing: 1,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                onPressed: _deleteMaterial,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: cs.primaryContainer.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.access_time_rounded, color: Colors.amber, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  "ESTIMATED STUDY DURATION: $estTime MINUTES",
+                  style: GoogleFonts.orbitron(
+                    color: cs.primaryContainer,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Text(
+            "CRITICAL CONCEPTS IDENTIFIED",
+            style: GoogleFonts.orbitron(
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: topics.map((t) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
+                ),
+                child: Text(
+                  t,
+                  style: GoogleFonts.outfit(
+                    color: cs.onSurface,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+
+          Text(
+            "CORE COGNITIVE SUMMARY",
+            style: GoogleFonts.orbitron(
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.2)),
+            ),
+            child: Text(
+              summary,
+              style: GoogleFonts.outfit(
+                color: cs.onSurfaceVariant,
+                fontSize: 12,
+                height: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Text(
+            "AI POMODORO SCHEDULE (ADD TO CALENDAR)",
+            style: GoogleFonts.orbitron(
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...schedule.map((session) {
+            final day = session['day'] as String? ?? 'Monday';
+            final topic = session['topic'] as String? ?? '';
+            final duration = session['duration'] as String? ?? '25 mins';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 80,
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: cs.primaryContainer.withOpacity(0.2)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      day.toUpperCase(),
+                      style: GoogleFonts.orbitron(
+                        color: cs.primaryContainer,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          topic,
+                          style: GoogleFonts.outfit(
+                            color: cs.onSurface,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          "Focus duration: $duration",
+                          style: GoogleFonts.outfit(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.add_task_rounded, color: cs.primaryContainer, size: 20),
+                    tooltip: "Add to Calendar Tasks",
+                    onPressed: () => _addScheduledTaskToPlanner(Map<String, dynamic>.from(session)),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          const SizedBox(height: 16),
+
+          if (videoRecon.isNotEmpty) ...[
+            Text(
+              "AI RECOMMENDED TRANSMISSIONS",
+              style: GoogleFonts.orbitron(
+                color: cs.onSurface,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...videoRecon.map((v) => _buildVideoItem(cs, Map<String, dynamic>.from(v), showSave: true)).toList(),
+            const SizedBox(height: 16),
+          ],
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.quiz_rounded, size: 18),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.greenAccent,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: _startMaterialQuiz,
+              label: Text(
+                "LAUNCH COGNITIVE QUIZ (10-Q)",
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizView(ColorScheme cs) {
+    if (_analyzedMaterial == null || _analyzedMaterial!['quiz'] == null) {
+      return const Scaffold(
+        body: Center(child: Text("No quiz available.")),
+      );
+    }
+
+    final quizList = _analyzedMaterial!['quiz'] as List;
+    if (_currentQuestionIndex >= quizList.length) {
+      return _buildQuizResultView(cs);
+    }
+
+    final currentQuestion = quizList[_currentQuestionIndex] as Map<String, dynamic>;
+    final questionText = currentQuestion['question'] as String? ?? '';
+    final options = List<String>.from(currentQuestion['options'] ?? []);
+    final correctAnswer = currentQuestion['answer'] as String? ?? '';
+    final explanation = currentQuestion['explanation'] as String? ?? '';
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        backgroundColor: cs.surface,
+        elevation: 0,
+        title: Text(
+          "COGNITIVE ASSESSMENT MATRIX",
+          style: GoogleFonts.orbitron(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+            letterSpacing: 1.5,
+          ),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF13101B),
+                title: Text(
+                  "ABORT ASSESSMENT?",
+                  style: GoogleFonts.orbitron(
+                    color: Colors.redAccent,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                content: Text(
+                  "Are you sure you want to exit the assessment? Your progress will be lost.",
+                  style: GoogleFonts.outfit(color: Colors.white70),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("CANCEL"),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _isTakingQuiz = false;
+                      });
+                    },
+                    child: const Text("ABORT", style: TextStyle(color: Colors.redAccent)),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "QUESTION ${_currentQuestionIndex + 1} OF 10",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: cs.primaryContainer,
+                    ),
+                  ),
+                  Text(
+                    "SCORE: $_quizScore/10",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.greenAccent,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: (_currentQuestionIndex + 1) / 10,
+                  backgroundColor: cs.surfaceContainerHigh,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.primaryContainer),
+                  minHeight: 6,
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                ),
+                child: Text(
+                  questionText,
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              ...options.map((opt) {
+                final isSelected = _selectedOptionInCurrentQuestion == opt;
+                final isCorrect = opt == correctAnswer;
+                
+                Color cardColor = cs.surfaceContainerLow;
+                Color borderColor = cs.outlineVariant;
+                Color textColor = cs.onSurface;
+
+                if (_hasAnsweredCurrentQuestion) {
+                  if (isCorrect) {
+                    cardColor = Colors.green.withOpacity(0.15);
+                    borderColor = Colors.greenAccent;
+                    textColor = Colors.greenAccent;
+                  } else if (isSelected) {
+                    cardColor = Colors.red.withOpacity(0.15);
+                    borderColor = Colors.redAccent;
+                    textColor = Colors.redAccent;
+                  }
+                } else if (isSelected) {
+                  cardColor = cs.primaryContainer.withOpacity(0.15);
+                  borderColor = cs.primaryContainer;
+                }
+
+                return GestureDetector(
+                  onTap: _hasAnsweredCurrentQuestion
+                      ? null
+                      : () {
+                          setState(() {
+                            _selectedOptionInCurrentQuestion = opt;
+                            _selectedAnswers[_currentQuestionIndex] = opt;
+                            _hasAnsweredCurrentQuestion = true;
+                            if (opt == correctAnswer) {
+                              _quizScore++;
+                            }
+                          });
+                        },
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor, width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            opt,
+                            style: GoogleFonts.outfit(
+                              color: textColor,
+                              fontSize: 14,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        if (_hasAnsweredCurrentQuestion) ...[
+                          if (isCorrect)
+                            const Icon(Icons.check_circle_rounded, color: Colors.greenAccent)
+                          else if (isSelected)
+                            const Icon(Icons.cancel_rounded, color: Colors.redAccent)
+                        ]
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+
+              const SizedBox(height: 20),
+
+              if (_hasAnsweredCurrentQuestion) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.lightbulb_outline_rounded, color: Colors.blueAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            "COGNITIVE DECONSTRUCTION",
+                            style: GoogleFonts.orbitron(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blueAccent,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        explanation,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primaryContainer,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        if (_currentQuestionIndex < 9) {
+                          _currentQuestionIndex++;
+                          _selectedOptionInCurrentQuestion = null;
+                          _hasAnsweredCurrentQuestion = false;
+                        } else {
+                          Provider.of<PetProvider>(context, listen: false)
+                              .awardGrowthPoints(studentID: widget.studentID, exp: 15, coins: 5);
+                          
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(widget.studentID)
+                              .set({
+                                'weeklyXP': FieldValue.increment(15),
+                              }, SetOptions(merge: true));
+
+                          _currentQuestionIndex++;
+                        }
+                      });
+                    },
+                    child: Text(
+                      _currentQuestionIndex < 9 ? "CONTINUE ASSESSMENT" : "SUBMIT ASSESSMENT",
+                      style: GoogleFonts.orbitron(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizResultView(ColorScheme cs) {
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Colors.amber,
+                  size: 80,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "ASSESSMENT COMPLETE",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Matrix scanning of your mental database has concluded.",
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+
+                Container(
+                  width: 180,
+                  height: 180,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerLow,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _quizScore >= 7 ? Colors.greenAccent : Colors.amber,
+                      width: 4,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "$_quizScore",
+                        style: GoogleFonts.orbitron(
+                          fontSize: 60,
+                          fontWeight: FontWeight.bold,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      Text(
+                        "OUT OF 10",
+                        style: GoogleFonts.orbitron(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rounded, color: Colors.amber, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        "+15 XP  &  +5 Coins Earned",
+                        style: GoogleFonts.orbitron(
+                          color: Colors.greenAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 48),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.greenAccent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isTakingQuiz = false;
+                        _currentQuestionIndex = 0;
+                        _quizScore = 0;
+                        _selectedAnswers = [];
+                      });
+                    },
+                    child: Text(
+                      "RETURN TO STUDY HQ",
+                      style: GoogleFonts.orbitron(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
