@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:my_nthu_life/services/firestore_services.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String studentID;
@@ -27,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
 
   Map<String, int> _activityHistory = {};
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {
@@ -46,95 +48,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadAllMetrics() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      // 1. Fetch User Document
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .get();
 
-      _currentName =
-          prefs.getString('profile_name_${widget.studentID}') ?? "NTHU Scholar";
-      _currentStudentID =
-          prefs.getString('profile_id_${widget.studentID}') ?? widget.studentID;
-      _nameController.text = _currentName;
-      _idController.text = _currentStudentID;
+      if (userDoc.exists) {
+        final data = userDoc.data()!;
+        
+        // Name and ID
+        _currentName = data['name'] ?? "NTHU Scholar";
+        _currentStudentID = data['studentID'] ?? widget.studentID;
+        _nameController.text = _currentName;
+        _idController.text = _currentStudentID;
 
-      final petString = prefs.getString('streak_pet_${widget.studentID}');
-      if (petString != null) {
-        final Map<String, dynamic> petMap = jsonDecode(petString);
-        _currentStreak = petMap['currentStreak'] ?? 0;
+        // Pet / Streak
+        if (data['pet'] != null) {
+          final pet = data['pet'] as Map<String, dynamic>;
+          _currentStreak = pet['currentStreak'] ?? 0;
+        }
+
+        // GPA and Credits from Courses
+        if (data['courses'] != null) {
+          final courses = data['courses'] as Map<String, dynamic>;
+          const gradePoints = {
+            'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+            'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+            'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+            'D': 1.0, 'E': 0.0, 'X': 0.0, 'F': 0.0,
+          };
+          
+          double totalPoints = 0;
+          int totalCreditsWithGrades = 0;
+          int totalEnrolledCredits = 0;
+
+          courses.forEach((_, courseData) {
+            final grade = courseData['grade'] as String?;
+            final credits = (courseData['credits'] ?? 0) as int;
+            totalEnrolledCredits += credits;
+
+            if (grade != null && grade != '–' && grade != '-' && gradePoints.containsKey(grade)) {
+              totalPoints += (gradePoints[grade]! * credits);
+              totalCreditsWithGrades += credits;
+            }
+          });
+
+          _currentGpa = totalCreditsWithGrades > 0 ? totalPoints / totalCreditsWithGrades : 0.0;
+          _enrolledCredits = totalEnrolledCredits;
+        }
       }
 
-      final tasksString = prefs.getString('tasks_${widget.studentID}');
+      // 2. Fetch Tasks for Activity History and Productivity
+      final taskSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .collection('tasks')
+          .get();
+
+      int total = 0;
+      int completed = 0;
       Map<String, int> tempActivity = {};
-      if (tasksString != null) {
-        final Map<String, dynamic> coursesMap = jsonDecode(tasksString);
-        int total = 0, completed = 0;
-        coursesMap.forEach((courseName, taskList) {
-          if (taskList is List) {
-            for (var task in taskList) {
-              total++;
-              if (task['isDone'] == true) {
-                completed++;
-                String dateKey = DateTime.now().toIso8601String().split('T')[0];
-                if (task['completedDate'] != null) {
-                  dateKey = task['completedDate'].toString().split('T')[0];
-                } else if (task['dueDate'] != null) {
-                  dateKey = task['dueDate'].toString().split('T')[0];
-                }
-                tempActivity[dateKey] = (tempActivity[dateKey] ?? 0) + 1;
-              }
+
+      for (var doc in taskSnap.docs) {
+        final task = doc.data();
+        final repeatType = task['repeatType'] as String? ?? 'None';
+        
+        if (repeatType == 'None') {
+          total++;
+          if (task['isDone'] == true) {
+            completed++;
+            String? dateKey = task['assignedDayString'];
+            if (dateKey != null) {
+              tempActivity[dateKey] = (tempActivity[dateKey] ?? 0) + 1;
             }
           }
-        });
-        _totalTasks = total;
-        _completedTasks = completed;
-        _activityHistory = tempActivity;
-      }
-
-      final gpaString = prefs.getString('gpa_courses_${widget.studentID}');
-      if (gpaString != null) {
-        final List<dynamic> decodedGpa = jsonDecode(gpaString);
-        const gradePoints = {
-          'A+': 4.3,
-          'A': 4.0,
-          'A-': 3.7,
-          'B+': 3.3,
-          'B': 3.0,
-          'B-': 2.7,
-          'C+': 2.3,
-          'C': 2.0,
-          'C-': 1.7,
-          'D': 1.0,
-          'E': 0.0,
-          'X': 0.0,
-        };
-        double totalPoints = 0;
-        int totalCreditsWithGrades = 0;
-        for (var course in decodedGpa) {
-          final String? grade = course['grade'];
-          final int credits = course['credits'] ?? 0;
-          if (grade != null && grade != '-' && gradePoints.containsKey(grade)) {
-            totalPoints += (gradePoints[grade]! * credits);
-            totalCreditsWithGrades += credits;
+        } else {
+          // For repeating tasks, count each completion date
+          final completedDates = List<String>.from(task['completedDates'] ?? []);
+          completed += completedDates.length;
+          total += completedDates.length; 
+          
+          for (var date in completedDates) {
+            tempActivity[date] = (tempActivity[date] ?? 0) + 1;
           }
         }
-        _currentGpa = totalCreditsWithGrades > 0
-            ? totalPoints / totalCreditsWithGrades
-            : 0.0;
       }
 
-      final semestersString = prefs.getString('Semesters_${widget.studentID}');
-      if (semestersString != null) {
-        final List<dynamic> decodedSemesters = jsonDecode(semestersString);
-        int credits = 0;
-        for (var semester in decodedSemesters) {
-          if (semester['courses'] != null) {
-            for (var course in semester['courses']) {
-              credits += (course['credits'] as num).toInt();
-            }
-          }
-        }
-        _enrolledCredits = credits;
-      }
+      _totalTasks = total;
+      _completedTasks = completed;
+      _activityHistory = tempActivity;
+
     } catch (e) {
-      debugPrint("Error loading profile metrics: $e");
+      debugPrint("Error loading profile metrics from Firestore: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -142,25 +148,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfileMeta() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'profile_name_${widget.studentID}',
-        _nameController.text.trim(),
-      );
-      await prefs.setString(
-        'profile_id_${widget.studentID}',
-        _idController.text.trim(),
-      );
+      final newName = _nameController.text.trim();
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.studentID)
+          .set({
+            'name': newName,
+          }, SetOptions(merge: true));
+
       setState(() {
-        _currentName = _nameController.text.trim();
-        _currentStudentID = _idController.text.trim();
+        _currentName = newName;
         _isEditing = false;
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              "Profile updated.",
+              "Profile updated in cloud.",
               style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
             ),
             backgroundColor: const Color(0xFF7B2CBF),
@@ -169,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     } catch (e) {
-      debugPrint("Error saving profile: $e");
+      debugPrint("Error saving profile to Firestore: $e");
     }
   }
 
@@ -182,7 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? ((_completedTasks / _totalTasks) * 100).clamp(0.0, 100.0)
         : 0.0;
     final intelligenceVal = ((_currentGpa / 4.3) * 100).clamp(0.0, 100.0);
-    final ambitionVal = ((_enrolledCredits / 25) * 100).clamp(0.0, 100.0);
+    final ambitionVal = ((_enrolledCredits / 128) * 100).clamp(0.0, 100.0);
 
     return Scaffold(
       backgroundColor: cs.surface,

@@ -803,17 +803,18 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildTopPomodoroCard(cs),
+              const SizedBox(height: 20),
+
               // --- 0. RECOMMENDED FOR YOU (AGENTIC) ---
-              if (isRecommendedLoading)
+              if (isRecommendedLoading) ...[
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
-                  margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(20),
@@ -839,12 +840,12 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                       ],
                     ),
                   ),
-                )
-              else if (recommendedVideos.isNotEmpty)
+                ),
+                const SizedBox(height: 20),
+              ] else if (recommendedVideos.isNotEmpty) ...[
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -890,12 +891,13 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 20),
+              ],
 
               // --- 1. CLASS SELECTION ---
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(20),
@@ -1110,41 +1112,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-
-                    // Action chips — gamified labels
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      // child: Row(
-                      //   children: [
-                      //     _buildActionChip(
-                      //       cs,
-                      //       Icons.menu_book_outlined,
-                      //       "Decode Topic",
-                      //       onTap: _explainTopic,
-                      //     ),
-                      //     _buildActionChip(
-                      //       cs,
-                      //       Icons.description_outlined,
-                      //       "Summarize",
-                      //       onTap: _summarizeNotes,
-                      //     ),
-                      //     _buildActionChip(
-                      //       cs,
-                      //       Icons.play_circle_outline_rounded,
-                      //       "Generate Video",
-                      //       onTap: _searchVideos,
-                      //     ),
-                      //     _buildActionChip(
-                      //       cs,
-                      //       Icons.quiz_outlined,
-                      //       "Run Trial",
-                      //       onTap: _generateQuiz,
-                      //     ),
-                      //     _buildActionChip(cs, Icons.more_horiz, "More"),
-                      //   ],
-                      // ),
-                    ),
                   ],
                 ),
               ),
@@ -1154,7 +1121,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
               if (summaryResult != null) ...[
                 Container(
                   width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 20),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerLow,
@@ -1191,6 +1157,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 20),
               ],
 
               // --- 4. VIDEO RECON SECTION ---
@@ -1288,7 +1255,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                     return Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
-                      margin: const EdgeInsets.only(bottom: 20),
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(20),
@@ -1341,7 +1307,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   return Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
                       color: cs.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(20),
@@ -1391,6 +1356,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
                   );
                 },
               ),
+              const SizedBox(height: 20),
 
               // --- 6. INTEL BANNER ---
               Container(
@@ -2459,7 +2425,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: const Color(0xFF13101B), // dark background
         borderRadius: BorderRadius.circular(20),
@@ -2614,7 +2579,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
-        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(20),
@@ -2700,7 +2664,6 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
-        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(20),

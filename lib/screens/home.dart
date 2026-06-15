@@ -81,42 +81,53 @@ class _HomeState extends State<Home> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: const Color(
-                        0xFF7C3AED,
-                      ).withOpacity(0.15),
-                      child: const Icon(Icons.person, color: Color(0xFF7C3AED)),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.studentID,
-                            style: GoogleFonts.orbitron(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('users').doc(widget.studentID).snapshots(),
+                builder: (context, snapshot) {
+                  String displayName = widget.studentID;
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    displayName = data['name'] ?? widget.studentID;
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: const Color(
+                            0xFF7C3AED,
+                          ).withOpacity(0.15),
+                          child: const Icon(Icons.person, color: Color(0xFF7C3AED)),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                style: GoogleFonts.orbitron(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                widget.studentID,
+                                style: GoogleFonts.outfit(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            "NTHU Student",
-                            style: GoogleFonts.outfit(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
               const Divider(height: 1),
               const SizedBox(height: 12),
