@@ -328,15 +328,41 @@ class FirestoreService {
 
       if (accept) {
         if (request['type'] == 'friend') {
-          // Add to friends list for both
+          // 1. Add to friends list for both
           await _firestore.collection('users').doc(uid).update({
             'friends': FieldValue.arrayUnion([request['fromUid']]),
-            // Move to request history to track that we were once friends/requested
             'requests_history': FieldValue.arrayUnion([request]),
           });
           await _firestore.collection('users').doc(request['fromUid']).update({
             'friends': FieldValue.arrayUnion([uid]),
           });
+
+          // AUTO-JOIN PARTY Logic:
+          // A. If the request explicitly included a partyId (Friend + Party flow)
+          if (request['partyId'] != null) {
+            await joinParty(
+              studentID: uid,
+              explicitPartyId: request['partyId'],
+            );
+          }
+
+          // B. If the acceptor (current user) has a party, have the sender join it
+          final myParty = await getUserParty(uid);
+          if (myParty != null) {
+            await joinParty(
+              studentID: request['fromUid'],
+              explicitPartyId: myParty['id'],
+            );
+          }
+
+          // C. Fallback: If the sender has a party, have the acceptor join it
+          final senderParty = await getUserParty(request['fromUid']);
+          if (senderParty != null) {
+            await joinParty(
+              studentID: uid,
+              explicitPartyId: senderParty['id'],
+            );
+          }
         } else if (request['type'] == 'party') {
           // Join the party
           await joinParty(

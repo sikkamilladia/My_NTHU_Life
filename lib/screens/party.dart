@@ -282,41 +282,39 @@ class _PartyPageState extends State<PartyPage>
       ),
     ) ?? false;
 
-    // 1. Always send friend request
+    // 1. Forge party if needed before sending request
+    String? finalPartyId = _myParty?.id;
+    String? finalPartyName = _myParty?.name;
+
+    if (wantParty && finalPartyId == null) {
+      finalPartyId = 'party_${widget.studentID}_${DateTime.now().millisecondsSinceEpoch}';
+      finalPartyName = '${widget.studentID}\'s SQUAD';
+      
+      await _firestoreService.createParty(
+        partyId: finalPartyId,
+        name: finalPartyName,
+        tag: 'TEAM',
+        creatorID: widget.studentID,
+        description: 'Auto-forged party to unite allies.',
+      );
+      
+      // Reload so UI shows we now have a party
+      await _loadParty();
+    }
+
+    // 2. Send friend request (with partyId if wantParty is true)
     await _firestoreService.sendSocialRequest(
       fromUid: widget.studentID,
       toUid: rec['uid'],
       type: 'friend',
+      partyId: wantParty ? finalPartyId : null,
+      partyName: wantParty ? finalPartyName : null,
     );
-    
-    // 2. If yes, also send party request
-    if (wantParty) {
-      String? pId = _myParty?.id;
-      String? pName = _myParty?.name;
-      
-      // If user doesn't have a party yet, they'll need to create one first or we just send a generic invite
-      // For simplicity, let's say it only works if they already have a party or we show a message
-      if (pId != null) {
-        await _firestoreService.sendSocialRequest(
-          fromUid: widget.studentID,
-          toUid: rec['uid'],
-          type: 'party',
-          partyId: pId,
-          partyName: pName,
-        );
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Friend request sent! To invite to a party, create one first.')),
-          );
-        }
-      }
-    }
 
     if (mounted) {
       setState(() {
         _sentRequestUids.add('${rec['uid']}_friend');
-        if (wantParty && _myParty != null) {
+        if (wantParty) {
           _sentRequestUids.add('${rec['uid']}_party');
         }
       });

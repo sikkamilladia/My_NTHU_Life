@@ -511,7 +511,9 @@ class _HomePageState extends State<_HomePage> {
                         child: Text(
                           isParty
                               ? 'Party Invite: ${req['partyName']}'
-                              : 'Friend Request',
+                              : (req['partyId'] != null
+                                  ? 'Friend + Party Request'
+                                  : 'Friend Request'),
                           style: GoogleFonts.orbitron(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
