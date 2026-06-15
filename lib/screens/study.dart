@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -28,24 +30,170 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   Map<String, dynamic>? quizResult;
   bool isExplaining = false;
   String? explanationResult;
-  bool studyStarted = false;
-  bool studyFinished = false;
 
   String? selectedCourse;
   List<String> availableCourses = [];
 
-  int studyMinutes = 25;
-  int breakMinutes = 5;
-  int totalSessions = 4;
-
-  int currentSession = 1;
-  int remainingSeconds = 1500;
+  // --- Pomodoro State Variables ---
+  bool _showTimerSetup = true;
+  int _selectedMinutes = 25;
+  int _remainingSeconds = 1500;
+  bool _isTimerRunning = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _fetchRecommendedVideos();
     _fetchAvailableCourses();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    setState(() {
+      _isTimerRunning = true;
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingSeconds > 0) {
+        setState(() {
+          _remainingSeconds--;
+        });
+      } else {
+        _timer?.cancel();
+        setState(() {
+          _isTimerRunning = false;
+        });
+        _showCompletionDialog();
+      }
+    });
+  }
+
+  void _pauseTimer() {
+    _timer?.cancel();
+    setState(() {
+      _isTimerRunning = false;
+    });
+  }
+
+  void _stopAndGoToSetup() {
+    _timer?.cancel();
+    setState(() {
+      _isTimerRunning = false;
+      _showTimerSetup = true;
+    });
+  }
+
+  void _showCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF13101B), // dark background
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.greenAccent, width: 2),
+          ),
+          title: Center(
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.forest_rounded,
+                  color: Colors.greenAccent,
+                  size: 60,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "SESSION COMPLETE!",
+                  style: GoogleFonts.orbitron(
+                    color: Colors.greenAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Incredible work! You successfully focused for $_selectedMinutes minutes and grew a gorgeous cyber-tree in your mental forest. 🌲✨",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                    const SizedBox(width: 6),
+                    Text(
+                      "+10 Focus Points Earned",
+                      style: GoogleFonts.orbitron(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: SizedBox(
+                width: 160,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.greenAccent,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _showTimerSetup = true;
+                      _remainingSeconds = _selectedMinutes * 60;
+                    });
+                  },
+                  child: Text(
+                    "CULTIVATE MORE",
+                    style: GoogleFonts.orbitron(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _fetchAvailableCourses() async {
@@ -118,6 +266,10 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    if (_showTimerSetup) {
+      return _buildTimerSetupView(cs);
+    }
+
     return Scaffold(
       backgroundColor: cs.surface, // #0B090A bgBlack
       appBar: AppBar(
@@ -140,6 +292,7 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildTopPomodoroCard(cs),
               // --- 0. RECOMMENDED FOR YOU (AGENTIC) ---
               if (isRecommendedLoading)
                 Container(
@@ -1187,6 +1340,497 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
         );
       },
     );
+  }
+
+  // ── Pomodoro Timer UI Builders ──────────────────────────────────────────────
+
+  Widget _buildTimerSetupView(ColorScheme cs) {
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 20),
+              // Header
+              Text(
+                "FOREST FOCUS COGNITION",
+                style: GoogleFonts.orbitron(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                  letterSpacing: 2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Set focus session to cultivate a cyber-tree and harvest intellectual assets.",
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: cs.onSurfaceVariant,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
+
+              // Custom dial
+              Center(
+                child: Container(
+                  width: 270,
+                  height: 270,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerLow.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: cs.outlineVariant.withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.greenAccent.withOpacity(0.02),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                      )
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: _CircularTimerDial(
+                    initialMinutes: _selectedMinutes,
+                    onChanged: (mins) {
+                      setState(() {
+                        _selectedMinutes = mins;
+                        _remainingSeconds = mins * 60;
+                      });
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 54),
+
+              // Buttons
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showTimerSetup = false;
+                    });
+                    _startTimer();
+                  },
+                  icon: const Icon(Icons.forest_rounded, size: 20),
+                  label: Text(
+                    "START FOCUS TIMER",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.greenAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 5,
+                    shadowColor: Colors.greenAccent.withOpacity(0.4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showTimerSetup = false;
+                      _remainingSeconds = _selectedMinutes * 60;
+                    });
+                  },
+                  icon: const Icon(Icons.smart_toy_outlined, size: 18),
+                  label: Text(
+                    "SKIP TO AI COMPANION",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: cs.primaryContainer,
+                    side: BorderSide(color: cs.primaryContainer.withOpacity(0.5), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopPomodoroCard(ColorScheme cs) {
+    final mins = _remainingSeconds ~/ 60;
+    final secs = _remainingSeconds % 60;
+    final totalSecs = _selectedMinutes * 60;
+    final percent = totalSecs > 0 ? _remainingSeconds / totalSecs : 0.0;
+
+    // Tree icon based on remaining or original selected minutes
+    IconData treeIcon = Icons.eco_rounded;
+    if (_selectedMinutes >= 15 && _selectedMinutes < 30) {
+      treeIcon = Icons.spa_rounded;
+    } else if (_selectedMinutes >= 30 && _selectedMinutes < 45) {
+      treeIcon = Icons.park_rounded;
+    } else if (_selectedMinutes >= 45) {
+      treeIcon = Icons.forest_rounded;
+    }
+
+    String statusText = "SEED READY TO SOW";
+    Color statusColor = cs.onSurfaceVariant;
+    if (_isTimerRunning) {
+      statusText = "CULTIVATING FOCUS TREE...";
+      statusColor = Colors.greenAccent;
+    } else if (_remainingSeconds < totalSecs) {
+      statusText = "FOCUS PAUSED";
+      statusColor = Colors.amber;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13101B), // dark background
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _isTimerRunning ? Colors.greenAccent.withOpacity(0.5) : cs.outlineVariant.withOpacity(0.3),
+          width: 1.5,
+        ),
+        boxShadow: _isTimerRunning
+            ? [
+                BoxShadow(
+                  color: Colors.greenAccent.withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          // Left: Small circular radial indicator
+          SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: percent,
+                  strokeWidth: 5,
+                  backgroundColor: cs.outlineVariant.withOpacity(0.1),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    _isTimerRunning ? Colors.greenAccent : cs.primaryContainer,
+                  ),
+                ),
+                Icon(
+                  treeIcon,
+                  color: _isTimerRunning ? Colors.greenAccent : cs.primaryContainer.withOpacity(0.6),
+                  size: 26,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Middle: Clock text and Status
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  statusText,
+                  style: GoogleFonts.orbitron(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Right: Control buttons
+          Row(
+            children: [
+              IconButton(
+                onPressed: () {
+                  if (_isTimerRunning) {
+                    _pauseTimer();
+                  } else {
+                    _startTimer();
+                  }
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: _isTimerRunning ? Colors.amber.withOpacity(0.15) : Colors.green.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isTimerRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: _isTimerRunning ? Colors.amber : Colors.greenAccent,
+                    size: 20,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _stopAndGoToSetup,
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.stop_rounded,
+                    color: Colors.redAccent,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Circular Timer Dial Widget ───────────────────────────────────────────────
+
+class _CircularTimerDial extends StatefulWidget {
+  final int initialMinutes;
+  final ValueChanged<int> onChanged;
+
+  const _CircularTimerDial({
+    required this.initialMinutes,
+    required this.onChanged,
+  });
+
+  @override
+  State<_CircularTimerDial> createState() => _CircularTimerDialState();
+}
+
+class _CircularTimerDialState extends State<_CircularTimerDial> {
+  late double _angle;
+
+  @override
+  void initState() {
+    super.initState();
+    _angle = (widget.initialMinutes / 60.0) * 2 * math.pi;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CircularTimerDial oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _angle = (widget.initialMinutes / 60.0) * 2 * math.pi;
+  }
+
+  void _handlePan(Offset localPosition, Size size) {
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    final dx = localPosition.dx - centerX;
+    final dy = localPosition.dy - centerY;
+
+    double angle = math.atan2(dy, dx) + math.pi / 2;
+    if (angle < 0) {
+      angle += 2 * math.pi;
+    }
+
+    int minutes = (angle / (2 * math.pi) * 60).round();
+    minutes = minutes.clamp(1, 60);
+
+    setState(() {
+      _angle = (minutes / 60.0) * 2 * math.pi;
+    });
+    widget.onChanged(minutes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final minutes = (widget.initialMinutes).clamp(1, 60);
+
+    IconData treeIcon = Icons.eco_rounded;
+    String treeLabel = "Sprout";
+    if (minutes >= 15 && minutes < 30) {
+      treeIcon = Icons.spa_rounded;
+      treeLabel = "Seedling";
+    } else if (minutes >= 30 && minutes < 45) {
+      treeIcon = Icons.park_rounded;
+      treeLabel = "Sapling";
+    } else if (minutes >= 45) {
+      treeIcon = Icons.forest_rounded;
+      treeLabel = "Forest";
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(240, 240);
+        return GestureDetector(
+          onPanStart: (details) => _handlePan(details.localPosition, size),
+          onPanUpdate: (details) => _handlePan(details.localPosition, size),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: size,
+                painter: _TimerDialPainter(
+                  angle: _angle,
+                  trackColor: cs.outlineVariant.withOpacity(0.2),
+                  activeColor: Colors.tealAccent,
+                  activeGradientColors: [
+                    Colors.teal,
+                    Colors.greenAccent,
+                  ],
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    treeIcon,
+                    size: 56,
+                    color: Colors.greenAccent,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "${minutes.toString().padLeft(2, '0')}:00",
+                    style: GoogleFonts.orbitron(
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    treeLabel.toUpperCase(),
+                    style: GoogleFonts.orbitron(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white54,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TimerDialPainter extends CustomPainter {
+  final double angle;
+  final Color trackColor;
+  final Color activeColor;
+  final List<Color> activeGradientColors;
+
+  _TimerDialPainter({
+    required this.angle,
+    required this.trackColor,
+    required this.activeColor,
+    required this.activeGradientColors,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    final center = Offset(centerX, centerY);
+    final radius = (size.width / 2) - 16;
+    const strokeWidth = 14.0;
+
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (angle > 0.0) {
+      final rect = Rect.fromCircle(center: center, radius: radius);
+      final activePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = strokeWidth;
+
+      if (activeGradientColors.length >= 2) {
+        activePaint.shader = SweepGradient(
+          colors: activeGradientColors,
+          startAngle: -math.pi / 2,
+          endAngle: angle - math.pi / 2,
+          transform: GradientRotation(-math.pi / 2),
+        ).createShader(rect);
+      } else {
+        activePaint.color = activeColor;
+      }
+
+      canvas.drawArc(rect, -math.pi / 2, angle, false, activePaint);
+    }
+
+    final thumbAngle = angle - math.pi / 2;
+    final thumbX = centerX + radius * math.cos(thumbAngle);
+    final thumbY = centerY + radius * math.sin(thumbAngle);
+    final thumbCenter = Offset(thumbX, thumbY);
+
+    final shadowPaint = Paint()
+      ..color = Colors.greenAccent.withOpacity(0.3)
+      ..style = PaintingStyle.fill
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawCircle(thumbCenter, 14, shadowPaint);
+
+    final thumbPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(thumbCenter, 8, thumbPaint);
+
+    final thumbCorePaint = Paint()
+      ..color = Colors.teal
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(thumbCenter, 4, thumbCorePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimerDialPainter oldDelegate) {
+    return oldDelegate.angle != angle ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.activeColor != activeColor;
   }
 }
 
