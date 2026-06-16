@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_nthu_life/services/ai_service.dart';
 import 'package:my_nthu_life/services/firestore_services.dart';
+import 'exam_crammer.dart';
+import 'professor_persona.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -772,6 +774,8 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildAdaptiveCrammerBanner(context, cs),
+              _buildProfessorPersonaBanner(context, cs),
               _buildTopPomodoroCard(cs),
               // --- 0. RECOMMENDED FOR YOU (AGENTIC) ---
               if (isRecommendedLoading)
@@ -2365,6 +2369,230 @@ class _AIStudyMaterialWidgetState extends State<AIStudyMaterialWidget> {
               color: cs.onSurfaceVariant,
             ),
             textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdaptiveCrammerBanner(BuildContext context, ColorScheme cs) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.purpleAccent.withOpacity(0.18),
+            cs.surfaceContainerLow,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.purpleAccent.withOpacity(0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purpleAccent.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.offline_bolt_rounded,
+                color: Colors.purpleAccent,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "ADAPTIVE EXAM CRAMMER",
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.purpleAccent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.purpleAccent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  "NEW SYSTEM",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.purpleAccent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Prep for midterms in 5 days! The system tracks your daily quiz results and automatically recalibrates upcoming study modules to target your weak spots.",
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              color: cs.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purpleAccent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 2,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdaptiveExamCrammerScreen(
+                      studentID: widget.studentID,
+                    ),
+                  ),
+                );
+              },
+              child: Text(
+                "ENTER THE WAR ROOM",
+                style: GoogleFonts.orbitron(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfessorPersonaBanner(BuildContext context, ColorScheme cs) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.tealAccent.withOpacity(0.12),
+            cs.surfaceContainerLow,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.tealAccent.withOpacity(0.35),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.tealAccent.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.psychology_rounded,
+                color: Colors.tealAccent,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "PROFESSOR PERSONA",
+                style: GoogleFonts.orbitron(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.tealAccent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.tealAccent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  "MOCK ORAL EXAM",
+                  style: GoogleFonts.orbitron(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.tealAccent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Simulate a final project oral presentation with an strict NTHU computer science professor. Practice defending your design and architecture choices under multi-turn pressure!",
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              color: cs.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 2,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfessorPersonaScreen(
+                      studentID: widget.studentID,
+                    ),
+                  ),
+                );
+              },
+              child: Text(
+                "ENTER PRESENTATION DEFENSE",
+                style: GoogleFonts.orbitron(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
           ),
         ],
       ),
