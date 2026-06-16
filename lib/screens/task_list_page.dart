@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -226,12 +227,64 @@ class _TaskListPageState extends State<TaskListPage> {
     List<int> selectedWeekdays = []; // 1=Mon, ..., 7=Sun
     List<Map<String, dynamic>> subtasks = [];
     bool isGenerating = false;
+    Timer? debounceTimer;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            Future<void> triggerAI() async {
+              if (taskTitle.trim().length < 3 || isGenerating) return;
+              setDialogState(() => isGenerating = true);
+              try {
+                final userDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(widget.studentID)
+                    .get();
+                final coursesMap = Map<String, dynamic>.from(
+                  userDoc.data()?['courses'] ?? {},
+                );
+                List<Map<String, dynamic>> grades = [];
+                coursesMap.forEach((key, value) {
+                  grades.add({
+                    'courseName': value['courseName'] ?? 'Unknown',
+                    'grade': value['grade'] ?? 'N/A',
+                  });
+                });
+
+                final result = await AIService.generateSubtasks(
+                  taskTitle: taskTitle,
+                  courseName: customCourseController.text,
+                  studentGrades: grades,
+                );
+
+                final generated = List<Map<String, dynamic>>.from(
+                  result['subtasks'] ?? [],
+                );
+
+                if (!context.mounted) return;
+
+                setDialogState(() {
+                  subtasks = generated;
+                  isGenerating = false;
+                  if (generated.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Failed to generate subtasks. Please check your API key in .env and restart the app.",
+                        ),
+                      ),
+                    );
+                  }
+                });
+              } catch (e) {
+                if (context.mounted) {
+                  setDialogState(() => isGenerating = false);
+                }
+              }
+            }
+
             return AlertDialog(
               backgroundColor: cs.surfaceContainerLow,
               shape: RoundedRectangleBorder(
@@ -279,12 +332,24 @@ class _TaskListPageState extends State<TaskListPage> {
                                   selectedCourse = val;
                                   customCourseController.text = val;
                                 });
+                                if (taskTitle.trim().isNotEmpty) {
+                                  triggerAI();
+                                }
                               }
                             },
                           )
                         : TextField(
                             controller: customCourseController,
                             style: TextStyle(color: cs.onSurface),
+                            onChanged: (val) {
+                              if (taskTitle.trim().isNotEmpty) {
+                                debounceTimer?.cancel();
+                                debounceTimer = Timer(
+                                  const Duration(milliseconds: 1500),
+                                  () => triggerAI(),
+                                );
+                              }
+                            },
                             decoration: InputDecoration(
                               labelText: "Target Course Name",
                               labelStyle: TextStyle(color: cs.primaryContainer),
@@ -311,7 +376,16 @@ class _TaskListPageState extends State<TaskListPage> {
                           borderSide: BorderSide(color: cs.surfaceBright),
                         ),
                       ),
-                      onChanged: (value) => taskTitle = value,
+                      onChanged: (value) {
+                        taskTitle = value;
+                        if (taskTitle.trim().isNotEmpty) {
+                          debounceTimer?.cancel();
+                          debounceTimer = Timer(
+                            const Duration(milliseconds: 1500),
+                            () => triggerAI(),
+                          );
+                        }
+                      },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
@@ -423,52 +497,7 @@ class _TaskListPageState extends State<TaskListPage> {
                       CircularProgressIndicator(color: cs.primaryContainer)
                     else
                       ElevatedButton.icon(
-                        onPressed: () async {
-                          if (taskTitle.trim().isEmpty) return;
-                          setDialogState(() => isGenerating = true);
-                          try {
-                            final userDoc = await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(widget.studentID)
-                                .get();
-                            final coursesMap = Map<String, dynamic>.from(
-                              userDoc.data()?['courses'] ?? {},
-                            );
-                            List<Map<String, dynamic>> grades = [];
-                            coursesMap.forEach((key, value) {
-                              grades.add({
-                                'courseName': value['courseName'] ?? 'Unknown',
-                                'grade': value['grade'] ?? 'N/A',
-                              });
-                            });
-
-                            final result = await AIService.generateSubtasks(
-                              taskTitle: taskTitle,
-                              courseName: customCourseController.text,
-                              studentGrades: grades,
-                            );
-
-                            final generated = List<Map<String, dynamic>>.from(
-                              result['subtasks'] ?? [],
-                            );
-
-                            setDialogState(() {
-                              subtasks = generated;
-                              isGenerating = false;
-                              if (generated.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "Failed to generate subtasks. Please check your API key in .env and restart the app.",
-                                    ),
-                                  ),
-                                );
-                              }
-                            });
-                          } catch (e) {
-                            setDialogState(() => isGenerating = false);
-                          }
-                        },
+                        onPressed: triggerAI,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: cs.outline,
                           foregroundColor: cs.onPrimary,
